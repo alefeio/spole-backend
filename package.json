@@ -1,0 +1,27 @@
+{
+  "name": "spole-api",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Spolê API (API-first modular monolith)",
+  "license": "UNLICENSED",
+  "main": "dist/main.js",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/main.js",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.15.21",
+    "@types/supertest": "^6.0.2",
+    "supertest": "^7.0.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5.8.3",
+    "vitest": "^2.1.9"
+  }
+}
