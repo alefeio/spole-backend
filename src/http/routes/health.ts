@@ -1,11 +1,19 @@
 import { Router } from "express";
-import { sendSuccess } from "../api-response";
+import { sendFailure, sendSuccess } from "../api-response";
+import { getHealthSnapshot, isHealthy } from "../../shared/health/health";
 
 export function healthRoutes() {
   const router = Router();
 
   router.get("/health", (_req, res) => {
-    return sendSuccess(res, { status: "ok" }, { uptimeMs: Math.round(process.uptime() * 1000) });
+    if (!isHealthy()) {
+      const snapshot = getHealthSnapshot();
+      return sendFailure(res, 500, "DEPENDENCY_INCONSISTENT", "Application is inconsistent", [
+        snapshot
+      ]);
+    }
+
+    return sendSuccess(res, { status: "ok" });
   });
 
   return router;

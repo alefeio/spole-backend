@@ -10,17 +10,29 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:infra": "vitest run -c vitest.infra.config.ts",
+    "lint": "eslint .",
+    "format": "prettier \"src\" \"test\" \"README.md\" \"package.json\" \"docker-compose.yml\" --write",
+    "format:check": "prettier \"src\" \"test\" \"README.md\" \"package.json\" \"docker-compose.yml\" --check"
   },
   "dependencies": {
-    "express": "^4.21.2"
+    "dotenv": "^16.5.0",
+    "express": "^4.21.2",
+    "pg": "^8.16.3",
+    "redis": "^5.8.2"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
     "@types/node": "^22.15.21",
+    "@types/pg": "^8.15.4",
     "@types/supertest": "^6.0.2",
+    "@eslint/js": "^9.28.0",
+    "eslint": "^9.28.0",
+    "prettier": "^3.3.3",
     "supertest": "^7.0.0",
     "tsx": "^4.20.5",
+    "typescript-eslint": "^8.33.0",
     "typescript": "^5.8.3",
     "vitest": "^2.1.9"
   }

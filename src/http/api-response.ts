@@ -15,11 +15,7 @@ export type ApiFailure = {
   };
 };
 
-export function sendSuccess<T>(
-  res: Response,
-  data: T,
-  meta?: Record<string, unknown>
-) {
+export function sendSuccess<T>(res: Response, data: T, meta?: Record<string, unknown>) {
   const payload: ApiSuccess<T> = meta ? { success: true, data, meta } : { success: true, data };
   return res.json(payload);
 }

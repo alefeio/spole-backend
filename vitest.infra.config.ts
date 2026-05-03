@@ -4,7 +4,7 @@ export default defineConfig({
   test: {
     environment: "node",
     setupFiles: ["test/test-env.ts"],
-    include: ["test/**/*.test.ts"],
-    exclude: ["test/**/*.infra.test.ts"]
+    include: ["test/**/*.infra.test.ts"]
   }
 });
+
