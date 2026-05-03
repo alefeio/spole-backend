@@ -1,6 +1,8 @@
 import type { Pool } from "pg";
 import express from "express";
 import { authRoutes } from "./modules/auth/routes";
+import { categoriesRoutes } from "./modules/categories/routes";
+import { eventsRoutes } from "./modules/events/routes";
 import { usersRoutes } from "./modules/users/routes";
 import { sendFailure } from "./http/api-response";
 import { errorMiddleware } from "./http/errors/error-middleware";
@@ -26,6 +28,8 @@ export function createApp(deps: AppDeps) {
   app.use(healthRoutes());
   app.use(authRoutes(deps));
   app.use(usersRoutes(deps));
+  app.use(categoriesRoutes(deps));
+  app.use(eventsRoutes(deps));
 
   app.use((_req, res) => {
     return sendFailure(res, 404, "RESOURCE_NOT_FOUND", "Resource not found");

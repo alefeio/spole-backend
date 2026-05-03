@@ -2,6 +2,8 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
+    // Migrações em paralelo entre arquivos podem disputar criação de tipos/enums no Postgres.
+    fileParallelism: false,
     environment: "node",
     setupFiles: ["test/test-env.ts"],
     include: ["test/**/*.test.ts"],
