@@ -13,6 +13,12 @@ export type Env = {
     port: number;
     password?: string;
   };
+  jwt: {
+    secret: string;
+    issuer: string;
+    audience: string;
+    expiresIn: string;
+  };
 };
 
 function required(name: string): string {
@@ -51,6 +57,12 @@ export function loadEnv(): Env {
       host: required("REDIS_HOST"),
       port: numberEnv("REDIS_PORT", 6379),
       password: process.env.REDIS_PASSWORD || undefined
+    },
+    jwt: {
+      secret: required("JWT_SECRET"),
+      issuer: process.env.JWT_ISSUER ?? "spole-api",
+      audience: process.env.JWT_AUDIENCE ?? "spole-clients",
+      expiresIn: process.env.JWT_EXPIRES_IN ?? "7d"
     }
   };
 }

@@ -1,6 +1,6 @@
 import type { ErrorRequestHandler } from "express";
 import { sendFailure } from "../api-response";
-import { AppError } from "./app-error";
+import { AppError } from "../../shared/errors/app-error";
 
 export const errorMiddleware: ErrorRequestHandler = (err, _req, res, _next) => {
   if (err instanceof AppError) {

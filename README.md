@@ -4,7 +4,7 @@ API REST do Spolê, seguindo abordagem **API-first** e **arquitetura modular por
 
 ## Objetivo deste repositório
 
-Esta base foi preparada na **Sprint 00** para permitir evolução disciplinada sprint a sprint, sem antecipar integrações ou regras de negócio fora do escopo.
+Esta base foi preparada para evolução disciplinada sprint a sprint, sem antecipar integrações ou regras de negócio fora do escopo de cada sprint.
 
 ## Como executar localmente
 
@@ -48,6 +48,23 @@ Resposta (padrão de sucesso):
 }
 ```
 
+## Autenticação (Sprint 02)
+
+Endpoints:
+
+- `POST /auth/register`
+- `POST /auth/login`
+- `GET /users/me` (requer `Authorization: Bearer <token>`)
+
+Variáveis JWT necessárias (veja `.env.example`):
+
+- `JWT_SECRET`
+- `JWT_ISSUER` (opcional)
+- `JWT_AUDIENCE` (opcional)
+- `JWT_EXPIRES_IN` (opcional)
+
+Migrações SQL ficam em `db/migrations/` e são aplicadas automaticamente no bootstrap quando a API sobe.
+
 ## Testes
 
 ### Testes leves
@@ -55,6 +72,8 @@ Resposta (padrão de sucesso):
 ```bash
 npm test
 ```
+
+> Observação: `npm test` também inclui testes de integração de autenticação **quando o Postgres estiver acessível** conforme `POSTGRES_*` no ambiente (e com defaults de JWT para testes via `test/test-env.ts`).
 
 ### Testes de integração de infraestrutura (PostgreSQL/Redis)
 
@@ -95,12 +114,12 @@ Os padrões oficiais estão em:
 - `src/main.ts`: bootstrap do servidor
 - `src/app.ts`: criação da aplicação (middlewares, rotas base, 404, erro centralizado)
 - `src/http/`: utilitários HTTP (envelope de resposta, rotas de infra, erros)
-- `src/modules/`: módulos por domínio (pastas reservadas para evolução nas próximas sprints)
+- `src/modules/`: módulos por domínio (`auth`, `users`, etc.)
+- `db/migrations/`: migrações SQL versionadas
 
 ## Nota sobre escopo
 
-Na Sprint 01 **não** existe:
+Fora do escopo imediato (conforme sprints):
 
-- autenticação funcional
-- endpoints de negócio
-- regras de domínio (apenas infraestrutura)
+- recuperação de senha / social login / MFA
+- CRUD de eventos / arenas / reservas / pagamentos (virão em sprints futuras)

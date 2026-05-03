@@ -10,6 +10,7 @@ describe("env", () => {
       delete process.env.POSTGRES_PASSWORD;
       delete process.env.POSTGRES_DB;
       delete process.env.REDIS_HOST;
+      delete process.env.JWT_SECRET;
 
       expect(() => loadEnv()).toThrow(/Missing required env var/);
     } finally {
@@ -28,11 +29,13 @@ describe("env", () => {
       process.env.POSTGRES_DB = "spole";
       process.env.REDIS_HOST = "localhost";
       process.env.REDIS_PORT = "6379";
+      process.env.JWT_SECRET = "test-secret";
 
       const env = loadEnv();
       expect(env.port).toBe(3001);
       expect(env.postgres.host).toBe("localhost");
       expect(env.redis.host).toBe("localhost");
+      expect(env.jwt.secret).toBe("test-secret");
     } finally {
       process.env = prev;
     }

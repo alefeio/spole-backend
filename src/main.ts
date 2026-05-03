@@ -2,6 +2,7 @@ import "dotenv/config";
 
 import { createApp } from "./app";
 import { createRedisClient, registerRedisHealth } from "./shared/cache/redis/redis";
+import { runMigrations } from "./shared/db/migrate";
 import { createPostgresPool, registerPostgresHealth } from "./shared/db/postgres/postgres";
 import { loadEnv } from "./shared/env/env";
 import { setPostgresHealthy, setRedisHealthy } from "./shared/health/health";
@@ -28,6 +29,15 @@ async function bootstrap() {
     process.exit(1);
   }
 
+  try {
+    await runMigrations(postgres, logger);
+  } catch (err) {
+    logger.error("failed to run migrations", { message: (err as Error).message });
+    await postgres.end().catch(() => undefined);
+    await redis.quit().catch(() => undefined);
+    process.exit(1);
+  }
+
   logger.info("connecting to redis...");
   try {
     await redis.connect();
@@ -40,7 +50,7 @@ async function bootstrap() {
     process.exit(1);
   }
 
-  const app = createApp();
+  const app = createApp({ pool: postgres, env });
 
   app.listen(env.port, () => {
     logger.info("listening", { port: env.port });

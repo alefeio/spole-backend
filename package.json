@@ -17,13 +17,18 @@
     "format:check": "prettier \"src\" \"test\" \"README.md\" \"package.json\" \"docker-compose.yml\" --check"
   },
   "dependencies": {
+    "bcryptjs": "^3.0.2",
     "dotenv": "^16.5.0",
     "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
     "pg": "^8.16.3",
-    "redis": "^5.8.2"
+    "redis": "^5.8.2",
+    "zod": "^3.25.28"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
     "@types/express": "^4.17.21",
+    "@types/jsonwebtoken": "^9.0.9",
     "@types/node": "^22.15.21",
     "@types/pg": "^8.15.4",
     "@types/supertest": "^6.0.2",

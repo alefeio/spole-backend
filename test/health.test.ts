@@ -1,6 +1,6 @@
 import request from "supertest";
 import { beforeEach, describe, expect, it } from "vitest";
-import { createApp } from "../src/app";
+import { createTestApp } from "./test-deps";
 import { resetHealth, setPostgresHealthy, setRedisHealthy } from "../src/shared/health/health";
 
 describe("GET /health", () => {
@@ -12,7 +12,7 @@ describe("GET /health", () => {
     setPostgresHealthy(true);
     setRedisHealthy(true);
 
-    const app = createApp();
+    const app = createTestApp();
 
     const res = await request(app).get("/health").expect(200);
 
@@ -26,7 +26,7 @@ describe("GET /health", () => {
     setPostgresHealthy(true);
     setRedisHealthy(false);
 
-    const app = createApp();
+    const app = createTestApp();
 
     const res = await request(app).get("/health").expect(500);
 

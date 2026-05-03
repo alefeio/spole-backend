@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { createApp } from "../src/app";
+import { createTestApp } from "./test-deps";
 
 describe("bootstrap", () => {
   it("deve conseguir criar a aplicação sem lançar erro", () => {
-    expect(() => createApp()).not.toThrow();
+    expect(() => createTestApp()).not.toThrow();
   });
 });
