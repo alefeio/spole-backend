@@ -10,6 +10,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY --from=deps /app/node_modules ./node_modules
 COPY tsconfig.json ./
+COPY tsconfig.build.json ./
 COPY src ./src
 COPY db ./db
 RUN npm run build

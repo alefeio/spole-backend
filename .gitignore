@@ -5,6 +5,9 @@ coverage
 .env.*
 !.env.example
 
+# Evita artefatos `tsc` acidentalmente emitidos em test/
+test/**/*.js
+
 # Logs
 *.log
 

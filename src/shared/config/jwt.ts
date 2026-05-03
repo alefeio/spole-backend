@@ -1,4 +1,4 @@
-import jwt from "jsonwebtoken";
+import jwt, { type SignOptions } from "jsonwebtoken";
 import type { Env } from "../env/env";
 import type { UserRole, UserStatus } from "../../types/auth";
 
@@ -9,18 +9,20 @@ export type JwtClaims = {
 };
 
 export function signAccessToken(env: Env, claims: JwtClaims) {
+  const options: SignOptions = {
+    subject: claims.sub,
+    issuer: env.jwt.issuer,
+    audience: env.jwt.audience,
+    expiresIn: env.jwt.expiresIn as SignOptions["expiresIn"]
+  };
+
   return jwt.sign(
     {
       role: claims.role,
       status: claims.status
     },
     env.jwt.secret,
-    {
-      subject: claims.sub,
-      issuer: env.jwt.issuer,
-      audience: env.jwt.audience,
-      expiresIn: env.jwt.expiresIn
-    }
+    options
   );
 }
 
