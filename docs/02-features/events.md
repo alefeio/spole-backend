@@ -190,16 +190,16 @@ O evento pode ser salvo como `DRAFT` antes de ser publicado.
 - 422 regra de domínio inválida
 
 ## 18. Critérios de aceite
-- [ ] Organizador consegue criar evento gratuito
-- [ ] Organizador consegue criar evento pago com preço válido
-- [ ] Organizador consegue criar evento público
-- [ ] Organizador consegue criar evento privado
-- [ ] Participante consegue listar eventos públicos
-- [ ] Participante consegue visualizar detalhes de evento público
-- [ ] Evento privado não aparece na listagem pública
-- [ ] Organizador consegue editar o próprio evento
-- [ ] Organizador consegue cancelar logicamente o próprio evento
-- [ ] Usuário sem permissão não consegue editar evento de outro usuário
+- [x] Organizador consegue criar evento gratuito
+- [x] Organizador consegue criar evento pago com preço válido
+- [x] Organizador consegue criar evento público
+- [x] Organizador consegue criar evento privado
+- [x] Participante consegue listar eventos públicos
+- [x] Participante consegue visualizar detalhes de evento público
+- [x] Evento privado não aparece na listagem pública
+- [x] Organizador consegue editar o próprio evento
+- [x] Organizador consegue cancelar logicamente o próprio evento
+- [x] Usuário sem permissão não consegue editar evento de outro usuário
 
 ## 19. Fora do escopo
 - compra de ingresso

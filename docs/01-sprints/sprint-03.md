@@ -291,27 +291,27 @@ Sem o CRUD de eventos e categorias, o produto ainda não entrega seu valor princ
 7. Organizador pode editar ou cancelar seu próprio evento.
 
 ## 10. Critérios de aceite
-- [ ] Admin consegue criar categorias
-- [ ] Categorias podem ser listadas publicamente
-- [ ] Organizador consegue criar evento gratuito
-- [ ] Organizador consegue criar evento pago com preço válido
-- [ ] Eventos públicos aparecem na listagem
-- [ ] Eventos privados não aparecem na listagem pública
-- [ ] Participante consegue ver detalhes de evento público
-- [ ] Organizador consegue editar o próprio evento
-- [ ] Organizador consegue cancelar logicamente o próprio evento
-- [ ] Usuário sem permissão não consegue editar evento de outro usuário
+- [x] Admin consegue criar categorias
+- [x] Categorias podem ser listadas publicamente
+- [x] Organizador consegue criar evento gratuito
+- [x] Organizador consegue criar evento pago com preço válido
+- [x] Eventos públicos aparecem na listagem
+- [x] Eventos privados não aparecem na listagem pública
+- [x] Participante consegue ver detalhes de evento público
+- [x] Organizador consegue editar o próprio evento
+- [x] Organizador consegue cancelar logicamente o próprio evento
+- [x] Usuário sem permissão não consegue editar evento de outro usuário
 
 ## 11. Critérios técnicos
-- [ ] Estrutura modular de categories criada
-- [ ] Estrutura modular de events criada
-- [ ] Validações de entrada aplicadas
-- [ ] Regras de domínio isoladas
-- [ ] Tratamento de erro padronizado
-- [ ] Paginação básica implementada
-- [ ] Filtros básicos implementados
-- [ ] testes automatizados compatíveis com o escopo
-- [ ] testes executáveis localmente
+- [x] Estrutura modular de categories criada
+- [x] Estrutura modular de events criada
+- [x] Validações de entrada aplicadas
+- [x] Regras de domínio isoladas
+- [x] Tratamento de erro padronizado
+- [x] Paginação básica implementada
+- [x] Filtros básicos implementados
+- [x] testes automatizados compatíveis com o escopo
+- [x] testes executáveis localmente
 
 ## 12. Riscos e cuidados
 - misturar evento em local livre com evento em arena nesta sprint
