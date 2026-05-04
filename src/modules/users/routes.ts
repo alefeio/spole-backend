@@ -5,6 +5,7 @@ import { requireAuth } from "../../shared/middleware/require-auth";
 import { requireRoles } from "../../shared/middleware/require-roles";
 import { listMyBookings } from "../bookings/service";
 import { listMyParticipants } from "../event-participants/service";
+import { listMyPayments } from "../payments/service";
 import { getMe } from "./service";
 
 export function usersRoutes(deps: AppDeps) {
@@ -52,6 +53,20 @@ export function usersRoutes(deps: AppDeps) {
     async (req, res, next) => {
       try {
         const data = await listMyBookings(deps, req.auth!);
+        return sendSuccess(res, data);
+      } catch (err) {
+        next(err);
+      }
+    }
+  );
+
+  router.get(
+    "/users/me/payments",
+    requireAuth(deps),
+    requireRoles(["user", "arena_owner", "admin"]),
+    async (req, res, next) => {
+      try {
+        const data = await listMyPayments(deps, req.auth!);
         return sendSuccess(res, data);
       } catch (err) {
         next(err);

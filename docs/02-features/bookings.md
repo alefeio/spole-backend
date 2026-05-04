@@ -6,6 +6,12 @@
 - **Redis**: chave `spole:booking:{id}` com TTL configurável (`BOOKING_TTL_SECONDS`, padrão **1800** = 30 min); **Postgres** guarda `expires_at`.
 - **Expiração**: promoção lazy de `RESERVED` → `EXPIRED` quando `expires_at <= now()` em fluxos que contam vagas ou listam bookings; chave Redis removida ao expirar ou cancelar.
 
+## Sprint 07 — recorte na API atual
+
+- Após pagamento aprovado (webhook), o booking vai para **`COMPLETED`**, com `purchase_completed_at` preenchido; a chave Redis do booking é removida e o booking deixa de contar como reserva ativa (`RESERVED`).
+- É criado um **`EventParticipant`** com status **`CONFIRMED`**; não há novo booking para o mesmo evento se o usuário já for participante confirmado.
+- Estados de booking na API: `RESERVED`, `EXPIRED`, `CANCELLED`, `COMPLETED`.
+
 ## 1. Resumo
 Gestão da reserva temporária de vagas ou ingressos em eventos pagos, garantindo bloqueio por tempo limitado, prevenção de dupla compra e confirmação definitiva após pagamento aprovado.
 

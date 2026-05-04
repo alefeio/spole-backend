@@ -64,6 +64,19 @@ async function hasActiveReservedBooking(conn: PgConn, eventId: string, userId: s
   return Boolean(r.rows[0]?.exists);
 }
 
+async function hasConfirmedParticipant(conn: PgConn, eventId: string, userId: string): Promise<boolean> {
+  const r = await conn.query<{ exists: boolean }>(
+    `
+      SELECT EXISTS (
+        SELECT 1 FROM event_participants
+        WHERE event_id = $1 AND user_id = $2 AND status = 'CONFIRMED'
+      ) AS exists
+    `,
+    [eventId, userId]
+  );
+  return Boolean(r.rows[0]?.exists);
+}
+
 function assertPaidEventForBooking(row: DbEvent) {
   if (row.status !== "PUBLISHED") {
     throw new AppError({
@@ -120,6 +133,15 @@ export async function createPaidBooking(
     }
 
     assertPaidEventForBooking(row);
+
+    if (await hasConfirmedParticipant(client, eventId, auth.id)) {
+      await client.query("ROLLBACK");
+      throw new AppError({
+        status: 409,
+        code: "ALREADY_REGISTERED",
+        message: "You are already registered for this event"
+      });
+    }
 
     if (await hasActiveReservedBooking(client, eventId, auth.id)) {
       await client.query("ROLLBACK");

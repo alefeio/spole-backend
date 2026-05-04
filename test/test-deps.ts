@@ -39,6 +39,7 @@ export function createTestDeps(params?: {
       audience: "spole-clients",
       expiresIn: "7d"
     },
+    paymentsWebhookSecret: "test-webhook-secret",
     ...(params?.env ?? {})
   };
 

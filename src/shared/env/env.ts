@@ -21,6 +21,8 @@ export type Env = {
     audience: string;
     expiresIn: string;
   };
+  /** Segredo enviado no header do webhook de pagamento (sem JWT). */
+  paymentsWebhookSecret: string;
 };
 
 function required(name: string): string {
@@ -66,6 +68,7 @@ export function loadEnv(): Env {
       issuer: process.env.JWT_ISSUER ?? "spole-api",
       audience: process.env.JWT_AUDIENCE ?? "spole-clients",
       expiresIn: process.env.JWT_EXPIRES_IN ?? "7d"
-    }
+    },
+    paymentsWebhookSecret: required("PAYMENTS_WEBHOOK_SECRET")
   };
 }

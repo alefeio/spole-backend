@@ -11,6 +11,7 @@ describe("env", () => {
       delete process.env.POSTGRES_DB;
       delete process.env.REDIS_HOST;
       delete process.env.JWT_SECRET;
+      delete process.env.PAYMENTS_WEBHOOK_SECRET;
 
       expect(() => loadEnv()).toThrow(/Missing required env var/);
     } finally {
@@ -30,6 +31,7 @@ describe("env", () => {
       process.env.REDIS_HOST = "localhost";
       process.env.REDIS_PORT = "6379";
       process.env.JWT_SECRET = "test-secret";
+      process.env.PAYMENTS_WEBHOOK_SECRET = "test-webhook-secret";
 
       const env = loadEnv();
       expect(env.port).toBe(3001);
@@ -37,6 +39,7 @@ describe("env", () => {
       expect(env.redis.host).toBe("localhost");
       expect(env.bookingTtlSeconds).toBe(1800);
       expect(env.jwt.secret).toBe("test-secret");
+      expect(env.paymentsWebhookSecret).toBe("test-webhook-secret");
     } finally {
       process.env = prev;
     }
