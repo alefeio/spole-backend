@@ -173,25 +173,25 @@ Sem o domínio de arenas e disponibilidade de horários, o Spolê ainda cobre ap
 6. Slots válidos ficam disponíveis para leitura e uso futuro em reservations.
 
 ## 10. Critérios de aceite
-- [ ] Owner ou admin consegue criar arena
-- [ ] Arena possui endereço persistido corretamente
-- [ ] Arena possui política básica persistida corretamente
-- [ ] Owner ou admin consegue criar spaces
-- [ ] Owner ou admin consegue criar slots
-- [ ] Sistema impede sobreposição de slots no mesmo space
-- [ ] Sistema lista slots por space
-- [ ] Sistema lista slots por arena
-- [ ] Usuário sem permissão não consegue editar ou criar estrutura em arena alheia
+- [x] Owner ou admin consegue criar arena
+- [x] Arena possui endereço persistido corretamente
+- [x] Arena possui política básica persistida corretamente
+- [x] Owner ou admin consegue criar spaces
+- [x] Owner ou admin consegue criar slots
+- [x] Sistema impede sobreposição de slots no mesmo space
+- [x] Sistema lista slots por space
+- [x] Sistema lista slots por arena
+- [x] Usuário sem permissão não consegue editar ou criar estrutura em arena alheia
 
 ## 11. Critérios técnicos
-- [ ] Estrutura modular de arenas criada
-- [ ] Estrutura modular de spaces criada
-- [ ] Estrutura modular de slots criada
-- [ ] Validações de entrada aplicadas
-- [ ] Ownership e autorização aplicados
-- [ ] Tratamento de erro padronizado
-- [ ] Testes automatizados cobrindo fluxos principais
-- [ ] Testes executáveis localmente
+- [x] Estrutura modular de arenas criada
+- [x] Estrutura modular de spaces criada
+- [x] Estrutura modular de slots criada
+- [x] Validações de entrada aplicadas
+- [x] Ownership e autorização aplicados
+- [x] Tratamento de erro padronizado
+- [x] Testes automatizados cobrindo fluxos principais
+- [x] Testes executáveis localmente
 
 ## 12. Riscos e cuidados
 - misturar reserva de slot com cadastro de disponibilidade nesta sprint

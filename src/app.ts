@@ -1,8 +1,11 @@
 import type { Pool } from "pg";
 import express from "express";
+import { arenasRoutes } from "./modules/arenas/routes";
 import { authRoutes } from "./modules/auth/routes";
 import { categoriesRoutes } from "./modules/categories/routes";
 import { eventsRoutes } from "./modules/events/routes";
+import { slotsRoutes } from "./modules/slots/routes";
+import { spacesRoutes } from "./modules/spaces/routes";
 import { usersRoutes } from "./modules/users/routes";
 import { sendFailure } from "./http/api-response";
 import { errorMiddleware } from "./http/errors/error-middleware";
@@ -30,6 +33,9 @@ export function createApp(deps: AppDeps) {
   app.use(usersRoutes(deps));
   app.use(categoriesRoutes(deps));
   app.use(eventsRoutes(deps));
+  app.use(spacesRoutes(deps));
+  app.use(slotsRoutes(deps));
+  app.use(arenasRoutes(deps));
 
   app.use((_req, res) => {
     return sendFailure(res, 404, "RESOURCE_NOT_FOUND", "Resource not found");
