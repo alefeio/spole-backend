@@ -5,6 +5,7 @@ import { sendFailure, sendSuccess } from "../../http/api-response";
 import { requireAuth } from "../../shared/middleware/require-auth";
 import { requireRoles } from "../../shared/middleware/require-roles";
 import { createCategorySchema, patchCategorySchema } from "./schemas";
+import { bumpPublicCatalogVersion } from "../../shared/cache/public-catalog-cache";
 import { createCategory, deleteCategory, listPublicCategories, updateCategory } from "./service";
 
 function formatZodError(err: ZodError) {
@@ -19,7 +20,7 @@ export function categoriesRoutes(deps: AppDeps) {
 
   router.get("/categories", async (_req, res, next) => {
     try {
-      const rows = await listPublicCategories(deps.pool);
+      const rows = await listPublicCategories(deps);
       return sendSuccess(res, rows);
     } catch (err) {
       next(err);
@@ -37,6 +38,7 @@ export function categoriesRoutes(deps: AppDeps) {
           return sendFailure(res, 400, "VALIDATION_ERROR", "Invalid request", formatZodError(parsed.error));
         }
         const row = await createCategory(deps.pool, parsed.data);
+        await bumpPublicCatalogVersion(deps.redis);
         return sendSuccess(res, row, undefined, 201);
       } catch (err) {
         next(err);
@@ -55,6 +57,7 @@ export function categoriesRoutes(deps: AppDeps) {
           return sendFailure(res, 400, "VALIDATION_ERROR", "Invalid request", formatZodError(parsed.error));
         }
         const row = await updateCategory(deps.pool, req.params.id, parsed.data);
+        await bumpPublicCatalogVersion(deps.redis);
         return sendSuccess(res, row);
       } catch (err) {
         next(err);
@@ -69,6 +72,7 @@ export function categoriesRoutes(deps: AppDeps) {
     async (req, res, next) => {
       try {
         await deleteCategory(deps.pool, req.params.id);
+        await bumpPublicCatalogVersion(deps.redis);
         return sendSuccess(res, { id: req.params.id, deleted: true });
       } catch (err) {
         next(err);

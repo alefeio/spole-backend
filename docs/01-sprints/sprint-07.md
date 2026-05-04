@@ -181,26 +181,26 @@ Após a Sprint 06, o sistema já cria bookings temporários para eventos pagos, 
 11. O usuário passa a estar efetivamente confirmado no evento pago.
 
 ## 10. Critérios de aceite
-- [ ] Usuário consegue criar pagamento pendente para booking válido
-- [ ] Sistema impede pagamento para booking inválido ou expirado
-- [ ] Sistema registra `grossAmount`, `feeAmount` e `netAmount`
-- [ ] Sistema registra a referência externa da transação
-- [ ] Webhook válido consegue confirmar pagamento
-- [ ] Pagamento aprovado conclui o booking
-- [ ] Pagamento aprovado cria ou confirma `EventParticipant`
-- [ ] Pagamento repetido não duplica efeitos
-- [ ] Usuário não consegue pagar booking de outro usuário
-- [ ] Usuário consegue listar os próprios pagamentos
+- [x] Usuário consegue criar pagamento pendente para booking válido
+- [x] Sistema impede pagamento para booking inválido ou expirado
+- [x] Sistema registra `grossAmount`, `feeAmount` e `netAmount`
+- [x] Sistema registra a referência externa da transação
+- [x] Webhook válido consegue confirmar pagamento
+- [x] Pagamento aprovado conclui o booking
+- [x] Pagamento aprovado cria ou confirma `EventParticipant`
+- [x] Pagamento repetido não duplica efeitos
+- [x] Usuário não consegue pagar booking de outro usuário
+- [x] Usuário consegue listar os próprios pagamentos
 
 ## 11. Critérios técnicos
-- [ ] Estrutura modular de `payments` criada
-- [ ] Regras de idempotência implementadas
-- [ ] Integração com `bookings` feita sem acoplamento excessivo
-- [ ] Integração com `event-participants` feita sem quebrar a Sprint 06
-- [ ] Tratamento de erro padronizado
-- [ ] Ownership e autorização aplicados
-- [ ] Testes automatizados cobrindo fluxos principais
-- [ ] Testes executáveis localmente
+- [x] Estrutura modular de `payments` criada
+- [x] Regras de idempotência implementadas
+- [x] Integração com `bookings` feita sem acoplamento excessivo
+- [x] Integração com `event-participants` feita sem quebrar a Sprint 06
+- [x] Tratamento de erro padronizado
+- [x] Ownership e autorização aplicados
+- [x] Testes automatizados cobrindo fluxos principais
+- [x] Testes executáveis localmente
 
 ## 12. Riscos e cuidados
 - processar o mesmo pagamento duas vezes

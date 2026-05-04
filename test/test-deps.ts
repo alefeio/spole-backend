@@ -8,7 +8,9 @@ export function createStubRedisClient(): RedisAppClient {
     connect: async () => undefined,
     quit: async () => undefined,
     on: () => undefined,
+    get: async () => null,
     setEx: async () => undefined,
+    incr: async () => 1,
     del: async () => 1
   } as unknown as RedisAppClient;
 }
@@ -40,6 +42,7 @@ export function createTestDeps(params?: {
       expiresIn: "7d"
     },
     paymentsWebhookSecret: "test-webhook-secret",
+    publicReadCacheTtlSeconds: 60,
     ...(params?.env ?? {})
   };
 

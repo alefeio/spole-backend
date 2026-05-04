@@ -40,6 +40,7 @@ describe("env", () => {
       expect(env.bookingTtlSeconds).toBe(1800);
       expect(env.jwt.secret).toBe("test-secret");
       expect(env.paymentsWebhookSecret).toBe("test-webhook-secret");
+      expect(env.publicReadCacheTtlSeconds).toBe(60);
     } finally {
       process.env = prev;
     }

@@ -201,6 +201,11 @@ Se o mesmo webhook chegar duas ou mais vezes, o sistema não pode duplicar efeit
 - 422 regra de domínio inválida
 - 500 falha de integração ou processamento
 
+## Recorte da API (Sprints 07–08)
+
+- O webhook de confirmação trata, nesta fase, apenas o corpo com **`status: PAID`** para concluir compra; outros valores não transicionam o pagamento para `FAILED`/`CANCELLED` via webhook.
+- `GET /users/me/payments` permanece **sem** paginação obrigatória na Sprint 08 (documentação explícita).
+
 ## 18. Critérios de aceite
 - [ ] Sistema consegue criar um pagamento `PENDING` para um booking válido
 - [ ] Sistema registra identificador da transação do gateway

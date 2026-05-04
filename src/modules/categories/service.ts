@@ -1,4 +1,11 @@
 import type { Pool } from "pg";
+import type { AppDeps } from "../../app";
+import {
+  getPublicCatalogVersion,
+  getReadThroughJson,
+  publicCategoriesCacheKey,
+  type PublicCategoriesCachedResult
+} from "../../shared/cache/public-catalog-cache";
 import { AppError } from "../../shared/errors/app-error";
 import type { CategoryStatus, CreateCategoryInput, PatchCategoryInput } from "./schemas";
 
@@ -43,7 +50,7 @@ export async function createCategory(pool: Pool, input: CreateCategoryInput): Pr
   }
 }
 
-export async function listPublicCategories(pool: Pool): Promise<PublicCategoryRow[]> {
+export async function listPublicCategoriesFromDb(pool: Pool): Promise<PublicCategoriesCachedResult> {
   const res = await pool.query<PublicCategoryRow>(
     `
       SELECT id, name, slug::text, icon
@@ -53,6 +60,13 @@ export async function listPublicCategories(pool: Pool): Promise<PublicCategoryRo
     `
   );
   return res.rows;
+}
+
+export async function listPublicCategories(deps: AppDeps): Promise<PublicCategoriesCachedResult> {
+  const ttl = deps.env.publicReadCacheTtlSeconds;
+  const version = await getPublicCatalogVersion(deps.redis);
+  const key = publicCategoriesCacheKey(version);
+  return getReadThroughJson(deps.redis, key, ttl, () => listPublicCategoriesFromDb(deps.pool));
 }
 
 export async function getCategoryById(pool: Pool, id: string): Promise<EventCategoryRow | null> {

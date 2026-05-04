@@ -5,6 +5,7 @@ import { sendFailure, sendSuccess } from "../../http/api-response";
 import { optionalAuth } from "../../shared/middleware/optional-auth";
 import { requireAuth } from "../../shared/middleware/require-auth";
 import { requireRoles } from "../../shared/middleware/require-roles";
+import { bumpPublicCatalogVersion } from "../../shared/cache/public-catalog-cache";
 import { listEventsQuerySchema, parseCreateEventBody, patchEventSchema } from "./schemas";
 import { cancelEvent, createEvent, getEventDetail, listPublicEvents, updateEvent } from "./service";
 
@@ -24,7 +25,7 @@ export function eventsRoutes(deps: AppDeps) {
       if (!parsed.success) {
         return sendFailure(res, 400, "VALIDATION_ERROR", "Invalid query", formatZodError(parsed.error));
       }
-      const { data, meta } = await listPublicEvents(deps.pool, parsed.data);
+      const { data, meta } = await listPublicEvents(deps, parsed.data);
       return sendSuccess(res, data, meta);
     } catch (err) {
       next(err);
@@ -53,6 +54,7 @@ export function eventsRoutes(deps: AppDeps) {
           return sendFailure(res, 400, "VALIDATION_ERROR", "Invalid request", formatZodError(parsed.error));
         }
         const created = await createEvent(deps.pool, req.auth!.id, parsed.data);
+        await bumpPublicCatalogVersion(deps.redis);
         return sendSuccess(res, created, undefined, 201);
       } catch (err) {
         next(err);
@@ -71,6 +73,7 @@ export function eventsRoutes(deps: AppDeps) {
           return sendFailure(res, 400, "VALIDATION_ERROR", "Invalid request", formatZodError(parsed.error));
         }
         const updated = await updateEvent(deps.pool, req.params.id, req.auth!, parsed.data);
+        await bumpPublicCatalogVersion(deps.redis);
         return sendSuccess(res, updated);
       } catch (err) {
         next(err);
@@ -85,6 +88,7 @@ export function eventsRoutes(deps: AppDeps) {
     async (req, res, next) => {
       try {
         const result = await cancelEvent(deps.pool, req.params.id, req.auth!);
+        await bumpPublicCatalogVersion(deps.redis);
         return sendSuccess(res, result);
       } catch (err) {
         next(err);

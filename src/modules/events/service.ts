@@ -1,4 +1,11 @@
 import type { Pool } from "pg";
+import type { AppDeps } from "../../app";
+import {
+  getPublicCatalogVersion,
+  getReadThroughJson,
+  publicEventsCacheKey,
+  type PublicListEventsCachedResult
+} from "../../shared/cache/public-catalog-cache";
 import { AppError } from "../../shared/errors/app-error";
 import { generatePrivateEventCode, safeEqualStrings } from "../../shared/security/private-code";
 import type { AuthUser } from "../../types/auth";
@@ -38,6 +45,11 @@ function numFromDb(v: string | null): number | null {
   if (v == null || v === "") return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
+}
+
+/** Escapa `\`, `%` e `_` para uso com ILIKE … ESCAPE '\\'. */
+function escapeIlikePattern(term: string): string {
+  return term.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
 }
 
 function validateEventRules(params: {
@@ -386,11 +398,21 @@ export async function createEvent(pool: Pool, organizerId: string, input: Create
   return createFreeLocationEvent(pool, organizerId, input);
 }
 
-export async function listPublicEvents(pool: Pool, query: ListEventsQuery) {
+export async function listPublicEventsFromDb(pool: Pool, query: ListEventsQuery): Promise<PublicListEventsCachedResult> {
   const conditions = [`e.visibility = 'PUBLIC'`, `e.status = 'PUBLISHED'`, `c.status = 'ACTIVE'`];
   const params: unknown[] = [];
   let i = 1;
 
+  if (query.q) {
+    const pat = `%${escapeIlikePattern(query.q)}%`;
+    const iTitle = i;
+    const iDesc = i + 1;
+    conditions.push(
+      `(e.title ILIKE $${iTitle} ESCAPE '\\' OR (e.description IS NOT NULL AND e.description ILIKE $${iDesc} ESCAPE '\\'))`
+    );
+    params.push(pat, pat);
+    i += 2;
+  }
   if (query.category) {
     conditions.push(`e.category_id = $${i++}`);
     params.push(query.category);
@@ -468,6 +490,13 @@ export async function listPublicEvents(pool: Pool, query: ListEventsQuery) {
       order: query.order
     }
   };
+}
+
+export async function listPublicEvents(deps: AppDeps, query: ListEventsQuery): Promise<PublicListEventsCachedResult> {
+  const ttl = deps.env.publicReadCacheTtlSeconds;
+  const version = await getPublicCatalogVersion(deps.redis);
+  const key = publicEventsCacheKey(version, query);
+  return getReadThroughJson(deps.redis, key, ttl, () => listPublicEventsFromDb(deps.pool, query));
 }
 
 export function mapEventDetail(row: DbEvent, includeOrganizerFields: boolean) {

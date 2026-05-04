@@ -63,6 +63,12 @@ Variáveis JWT necessárias (veja `.env.example`):
 - `JWT_AUDIENCE` (opcional)
 - `JWT_EXPIRES_IN` (opcional)
 
+**Pagamentos (Sprint 07):** `PAYMENTS_WEBHOOK_SECRET` é obrigatório. O endpoint `POST /payments/webhook` **não** usa JWT; valida o header `X-Spole-Payment-Webhook-Secret`. Nesta fase o corpo do webhook só trata confirmação com **`status: PAID`** (outros valores devolvem erro de validação sem transicionar o pagamento para `FAILED`/`CANCELLED`).
+
+**Cache público (Sprint 08):** `PUBLIC_READ_CACHE_TTL_SECONDS` (opcional, default 60) controla o TTL em Redis das respostas de `GET /events` e `GET /categories`. Se o Redis falhar, a API responde a partir do Postgres. A invalidação usa uma versão global de catálogo (`INCR` em Redis), sem `KEYS`.
+
+**Listagens autenticadas:** `GET /users/me/bookings` e `GET /users/me/payments` **não** fazem parte do escopo obrigatório de paginação da Sprint 08; permanecem sem `page`/`limit` até decisão futura.
+
 Migrações SQL ficam em `db/migrations/` e são aplicadas automaticamente no bootstrap quando a API sobe.
 
 ## Testes
@@ -73,7 +79,7 @@ Migrações SQL ficam em `db/migrations/` e são aplicadas automaticamente no bo
 npm test
 ```
 
-> Observação: `npm test` também inclui testes de integração de autenticação **quando o Postgres estiver acessível** conforme `POSTGRES_*` no ambiente (e com defaults de JWT para testes via `test/test-env.ts`).
+> Observação: `npm test` inclui testes de integração **quando Postgres (e, para sprints que usam cache, Redis) estiver acessível** conforme `POSTGRES_*` / `REDIS_*` no ambiente. O Vitest usa `testTimeout` elevado para estabilizar migrações e fluxos lentos. Em CI (`.github/workflows/ci.yml`), serviços `postgres` e `redis` são iniciados automaticamente.
 
 ### Testes de integração de infraestrutura (PostgreSQL/Redis)
 
@@ -117,9 +123,13 @@ Os padrões oficiais estão em:
 - `src/modules/`: módulos por domínio (`auth`, `users`, etc.)
 - `db/migrations/`: migrações SQL versionadas
 
+## CI
+
+- Workflow GitHub Actions: `npm run build`, `npm run lint`, `npm test` com Postgres e Redis de serviço.
+
 ## Nota sobre escopo
 
 Fora do escopo imediato (conforme sprints):
 
 - recuperação de senha / social login / MFA
-- CRUD de eventos / arenas / reservas / pagamentos (virão em sprints futuras)
+- Elasticsearch / Search Service / Kafka para busca pública

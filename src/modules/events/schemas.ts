@@ -137,6 +137,7 @@ const qEmpty = (v: unknown) => (v === "" || v === undefined || v === null ? unde
 export const listEventsQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(10),
+  q: z.preprocess(qEmpty, z.string().trim().min(1).max(200)).optional(),
   category: z.preprocess(qEmpty, z.string().uuid()).optional(),
   city: z.preprocess(qEmpty, z.string().min(1).max(200)).optional(),
   dateFrom: z.preprocess(qEmpty, isoDateTime).optional(),
