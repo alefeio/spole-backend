@@ -1,10 +1,36 @@
+import type { ZodError } from "zod";
 import { z } from "zod";
 
 const isoDateTime = z.string().datetime({ offset: true });
 
 const privateCodeSchema = z.string().min(8).max(128);
 
-export const createEventSchema = z
+const priceAndPrivateRefine = (data: { type: string; pricePerPerson?: unknown; visibility: string; privateCode?: unknown }, ctx: z.RefinementCtx) => {
+  if (data.type === "PAID") {
+    if (data.pricePerPerson == null || Number(data.pricePerPerson) <= 0) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["pricePerPerson"],
+        message: "Paid events require pricePerPerson > 0"
+      });
+    }
+  } else if (data.pricePerPerson != null && Number(data.pricePerPerson) > 0) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["pricePerPerson"],
+      message: "Free events must not set a positive price"
+    });
+  }
+  if (data.visibility === "PUBLIC" && data.privateCode != null && String(data.privateCode).trim() !== "") {
+    ctx.addIssue({
+      code: "custom",
+      path: ["privateCode"],
+      message: "privateCode must not be set for public events"
+    });
+  }
+};
+
+export const createEventFreeLocationSchema = z
   .object({
     categoryId: z.string().uuid(),
     title: z.string().min(1).max(300),
@@ -31,31 +57,47 @@ export const createEventSchema = z
     if (!(end > start)) {
       ctx.addIssue({ code: "custom", path: ["endAt"], message: "endAt must be after startAt" });
     }
-    if (data.type === "PAID") {
-      if (data.pricePerPerson == null || data.pricePerPerson <= 0) {
-        ctx.addIssue({
-          code: "custom",
-          path: ["pricePerPerson"],
-          message: "Paid events require pricePerPerson > 0"
-        });
-      }
-    } else if (data.pricePerPerson != null && data.pricePerPerson > 0) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["pricePerPerson"],
-        message: "Free events must not set a positive price"
-      });
-    }
-    if (data.visibility === "PUBLIC" && data.privateCode != null && String(data.privateCode).trim() !== "") {
-      ctx.addIssue({
-        code: "custom",
-        path: ["privateCode"],
-        message: "privateCode must not be set for public events"
-      });
-    }
+    priceAndPrivateRefine(data, ctx);
   });
 
-export type CreateEventInput = z.infer<typeof createEventSchema>;
+export const createEventArenaReservationSchema = z
+  .object({
+    categoryId: z.string().uuid(),
+    reservationId: z.string().uuid(),
+    title: z.string().min(1).max(300),
+    description: z.string().max(8000).optional(),
+    type: z.enum(["FREE", "PAID"]),
+    visibility: z.enum(["PUBLIC", "PRIVATE"]),
+    sourceType: z.literal("ARENA_RESERVATION"),
+    status: z.enum(["DRAFT", "PUBLISHED"]),
+    capacity: z.number().int().positive(),
+    pricePerPerson: z.number().positive().optional().nullable(),
+    privateCode: privateCodeSchema.optional()
+  })
+  .superRefine((data, ctx) => {
+    priceAndPrivateRefine(data, ctx);
+  });
+
+export type CreateEventFreeLocationInput = z.infer<typeof createEventFreeLocationSchema>;
+export type CreateEventArenaReservationInput = z.infer<typeof createEventArenaReservationSchema>;
+export type CreateEventInput = CreateEventFreeLocationInput | CreateEventArenaReservationInput;
+
+/** @deprecated use createEventFreeLocationSchema */
+export const createEventSchema = createEventFreeLocationSchema;
+
+export function parseCreateEventBody(
+  body: unknown
+):
+  | { success: true; data: CreateEventInput }
+  | { success: false; error: ZodError } {
+  const rec = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+  if (rec.sourceType === "ARENA_RESERVATION") {
+    const r = createEventArenaReservationSchema.safeParse(body);
+    return r.success ? { success: true, data: r.data } : { success: false, error: r.error };
+  }
+  const r = createEventFreeLocationSchema.safeParse(body);
+  return r.success ? { success: true, data: r.data } : { success: false, error: r.error };
+}
 
 export const patchEventSchema = z
   .object({

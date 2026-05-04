@@ -176,26 +176,26 @@ Após a Sprint 04, o sistema já possui arenas, spaces e slots disponíveis, mas
 7. Se a reserva for cancelada antes do uso impeditivo, o slot volta à disponibilidade.
 
 ## 10. Critérios de aceite
-- [ ] Organizador consegue reservar slot disponível
-- [ ] Sistema impede reserva de slot indisponível
-- [ ] Sistema impede dupla reserva do mesmo slot
-- [ ] Organizador consegue listar as próprias reservas
-- [ ] Arena consegue visualizar reservas dos próprios slots
-- [ ] Organizador consegue cancelar a própria reserva
-- [ ] Cancelamento devolve disponibilidade ao slot quando aplicável
-- [ ] Organizador consegue criar evento em arena usando `reservationId` válido
-- [ ] Usuário não consegue criar evento usando reserva de outro organizador
-- [ ] Usuário sem permissão não consegue cancelar reserva alheia
+- [x] Organizador consegue reservar slot disponível
+- [x] Sistema impede reserva de slot indisponível
+- [x] Sistema impede dupla reserva do mesmo slot
+- [x] Organizador consegue listar as próprias reservas
+- [x] Arena consegue visualizar reservas dos próprios slots
+- [x] Organizador consegue cancelar a própria reserva
+- [x] Cancelamento devolve disponibilidade ao slot quando aplicável
+- [x] Organizador consegue criar evento em arena usando `reservationId` válido
+- [x] Usuário não consegue criar evento usando reserva de outro organizador
+- [x] Usuário sem permissão não consegue cancelar reserva alheia
 
 ## 11. Critérios técnicos
-- [ ] Estrutura modular de reservations criada
-- [ ] Regras de domínio de reserva isoladas
-- [ ] Integração com events feita sem acoplamento excessivo
-- [ ] Atualização consistente do status do slot
-- [ ] Ownership e autorização aplicados
-- [ ] Tratamento de erro padronizado
-- [ ] Testes automatizados cobrindo fluxos principais
-- [ ] Testes executáveis localmente
+- [x] Estrutura modular de reservations criada
+- [x] Regras de domínio de reserva isoladas
+- [x] Integração com events feita sem acoplamento excessivo
+- [x] Atualização consistente do status do slot
+- [x] Ownership e autorização aplicados
+- [x] Tratamento de erro padronizado
+- [x] Testes automatizados cobrindo fluxos principais
+- [x] Testes executáveis localmente
 
 ## 12. Riscos e cuidados
 - misturar reserva operacional com pagamento completo cedo demais

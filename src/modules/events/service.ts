@@ -2,7 +2,13 @@ import type { Pool } from "pg";
 import { AppError } from "../../shared/errors/app-error";
 import { generatePrivateEventCode, safeEqualStrings } from "../../shared/security/private-code";
 import type { AuthUser } from "../../types/auth";
-import type { CreateEventInput, ListEventsQuery, PatchEventInput } from "./schemas";
+import type {
+  CreateEventArenaReservationInput,
+  CreateEventFreeLocationInput,
+  CreateEventInput,
+  ListEventsQuery,
+  PatchEventInput
+} from "./schemas";
 
 type DbEvent = {
   id: string;
@@ -12,7 +18,7 @@ type DbEvent = {
   description: string | null;
   type: "FREE" | "PAID";
   visibility: "PUBLIC" | "PRIVATE";
-  source_type: "FREE_LOCATION";
+  source_type: "FREE_LOCATION" | "ARENA_RESERVATION";
   status: "DRAFT" | "PUBLISHED" | "CANCELLED";
   start_at: string;
   end_at: string;
@@ -25,6 +31,7 @@ type DbEvent = {
   capacity: number;
   price_per_person: string | null;
   private_code: string | null;
+  reservation_id: string | null;
 };
 
 function numFromDb(v: string | null): number | null {
@@ -91,7 +98,7 @@ async function loadEvent(pool: Pool, id: string): Promise<DbEvent | null> {
       SELECT
         id, organizer_id, category_id, title, description, type::text, visibility::text,
         source_type::text, status::text, start_at, end_at, address_name, street, number,
-        district, city, state, capacity, price_per_person::text, private_code
+        district, city, state, capacity, price_per_person::text, private_code, reservation_id
       FROM events
       WHERE id = $1
       LIMIT 1
@@ -126,7 +133,21 @@ function shouldIncludePrivateCodeInDetail(row: DbEvent, auth: AuthUser | undefin
   return Boolean(auth && (auth.role === "admin" || auth.id === row.organizer_id));
 }
 
-export async function createEvent(pool: Pool, organizerId: string, input: CreateEventInput) {
+function mapCreatedEvent(row: DbEvent) {
+  const base = {
+    id: row.id,
+    title: row.title,
+    type: row.type,
+    visibility: row.visibility,
+    status: row.status
+  };
+  if (row.visibility === "PRIVATE" && row.private_code) {
+    return { ...base, privateCode: row.private_code };
+  }
+  return base;
+}
+
+async function createFreeLocationEvent(pool: Pool, organizerId: string, input: CreateEventFreeLocationInput) {
   await assertCategoryForEvent(pool, input.categoryId);
 
   const startAt = new Date(input.startAt);
@@ -153,13 +174,13 @@ export async function createEvent(pool: Pool, organizerId: string, input: Create
       INSERT INTO events (
         organizer_id, category_id, title, description, type, visibility, source_type, status,
         start_at, end_at, address_name, street, number, district, city, state, capacity, price_per_person,
-        private_code
+        private_code, reservation_id
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, NULL)
       RETURNING
         id, organizer_id, category_id, title, description, type::text, visibility::text,
         source_type::text, status::text, start_at, end_at, address_name, street, number,
-        district, city, state, capacity, price_per_person::text, private_code
+        district, city, state, capacity, price_per_person::text, private_code, reservation_id
     `,
     [
       organizerId,
@@ -189,17 +210,180 @@ export async function createEvent(pool: Pool, organizerId: string, input: Create
     throw new AppError({ status: 500, code: "EVENT_CREATE_FAILED", message: "Event create failed" });
   }
 
-  const base = {
-    id: row.id,
-    title: row.title,
-    type: row.type,
-    visibility: row.visibility,
-    status: row.status
-  };
-  if (row.visibility === "PRIVATE" && row.private_code) {
-    return { ...base, privateCode: row.private_code };
+  return mapCreatedEvent(row);
+}
+
+async function createArenaReservationEvent(pool: Pool, organizerId: string, input: CreateEventArenaReservationInput) {
+  await assertCategoryForEvent(pool, input.categoryId);
+
+  const price = input.type === "PAID" ? input.pricePerPerson ?? null : null;
+
+  const privateCode =
+    input.visibility === "PRIVATE"
+      ? (input.privateCode?.trim() && input.privateCode.trim().length >= 8
+          ? input.privateCode.trim()
+          : generatePrivateEventCode())
+      : null;
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const ctxRes = await client.query<{
+      res_id: string;
+      res_status: string;
+      res_organizer: string;
+      slot_id: string;
+      slot_status: string;
+      start_at: string;
+      end_at: string;
+      arena_name: string;
+      street: string | null;
+      number: string | null;
+      district: string | null;
+      city: string | null;
+      state: string | null;
+    }>(
+      `
+        SELECT
+          r.id AS res_id,
+          r.status::text AS res_status,
+          r.organizer_id AS res_organizer,
+          s.id AS slot_id,
+          s.status::text AS slot_status,
+          s.start_at,
+          s.end_at,
+          a.name AS arena_name,
+          ad.street,
+          ad.number,
+          ad.district,
+          ad.city,
+          ad.state
+        FROM reservations r
+        INNER JOIN arena_slots s ON s.id = r.slot_id
+        INNER JOIN arena_spaces sp ON sp.id = s.space_id
+        INNER JOIN arenas a ON a.id = sp.arena_id
+        LEFT JOIN arena_addresses ad ON ad.arena_id = a.id
+        WHERE r.id = $1
+        FOR UPDATE OF r, s
+      `,
+      [input.reservationId]
+    );
+    const ctx = ctxRes.rows[0];
+    if (!ctx) {
+      await client.query("ROLLBACK");
+      throw new AppError({ status: 404, code: "RESERVATION_NOT_FOUND", message: "Reservation not found" });
+    }
+    if (ctx.res_organizer !== organizerId) {
+      await client.query("ROLLBACK");
+      throw new AppError({
+        status: 403,
+        code: "FORBIDDEN",
+        message: "Reservation does not belong to this user"
+      });
+    }
+    if (ctx.res_status !== "CONFIRMED") {
+      await client.query("ROLLBACK");
+      throw new AppError({
+        status: 422,
+        code: "RESERVATION_INVALID_STATE",
+        message: "Reservation is not available for creating an event"
+      });
+    }
+    if (ctx.slot_status !== "RESERVED") {
+      await client.query("ROLLBACK");
+      throw new AppError({
+        status: 422,
+        code: "SLOT_INVALID_STATE",
+        message: "Slot is not in a valid state for this reservation"
+      });
+    }
+
+    if (!ctx.street || !ctx.number || !ctx.district || !ctx.city || !ctx.state) {
+      await client.query("ROLLBACK");
+      throw new AppError({
+        status: 422,
+        code: "ARENA_ADDRESS_MISSING",
+        message: "Arena address is required to create this event"
+      });
+    }
+
+    const startAt = new Date(ctx.start_at);
+    const endAt = new Date(ctx.end_at);
+
+    validateEventRules({
+      type: input.type,
+      pricePerPerson: price,
+      startAt,
+      endAt,
+      capacity: input.capacity
+    });
+
+    const ins = await client.query<DbEvent>(
+      `
+        INSERT INTO events (
+          organizer_id, category_id, title, description, type, visibility, source_type, status,
+          start_at, end_at, address_name, street, number, district, city, state, capacity, price_per_person,
+          private_code, reservation_id
+        )
+        VALUES (
+          $1, $2, $3, $4, $5, $6, 'ARENA_RESERVATION', $7,
+          $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19
+        )
+        RETURNING
+          id, organizer_id, category_id, title, description, type::text, visibility::text,
+          source_type::text, status::text, start_at, end_at, address_name, street, number,
+          district, city, state, capacity, price_per_person::text, private_code, reservation_id
+      `,
+      [
+        organizerId,
+        input.categoryId,
+        input.title,
+        input.description ?? null,
+        input.type,
+        input.visibility,
+        input.status,
+        ctx.start_at,
+        ctx.end_at,
+        ctx.arena_name,
+        ctx.street,
+        ctx.number,
+        ctx.district,
+        ctx.city,
+        ctx.state,
+        input.capacity,
+        price,
+        privateCode,
+        input.reservationId
+      ]
+    );
+
+    const row = ins.rows[0];
+    if (!row) {
+      await client.query("ROLLBACK");
+      throw new AppError({ status: 500, code: "EVENT_CREATE_FAILED", message: "Event create failed" });
+    }
+
+    await client.query(
+      `UPDATE reservations SET status = 'CONSUMED', updated_at = now() WHERE id = $1`,
+      [input.reservationId]
+    );
+
+    await client.query("COMMIT");
+    return mapCreatedEvent(row);
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw err;
+  } finally {
+    client.release();
   }
-  return base;
+}
+
+export async function createEvent(pool: Pool, organizerId: string, input: CreateEventInput) {
+  if (input.sourceType === "ARENA_RESERVATION") {
+    return createArenaReservationEvent(pool, organizerId, input);
+  }
+  return createFreeLocationEvent(pool, organizerId, input);
 }
 
 export async function listPublicEvents(pool: Pool, query: ListEventsQuery) {
@@ -252,7 +436,7 @@ export async function listPublicEvents(pool: Pool, query: ListEventsQuery) {
       SELECT
         e.id, e.organizer_id, e.category_id, e.title, e.description, e.type::text, e.visibility::text,
         e.source_type::text, e.status::text, e.start_at, e.end_at, e.address_name, e.street, e.number,
-        e.district, e.city, e.state, e.capacity, e.price_per_person::text, e.private_code
+        e.district, e.city, e.state, e.capacity, e.price_per_person::text, e.private_code, e.reservation_id
       FROM events e
       INNER JOIN event_categories c ON c.id = e.category_id
       WHERE ${whereSql}
@@ -286,7 +470,7 @@ export async function listPublicEvents(pool: Pool, query: ListEventsQuery) {
   };
 }
 
-export function mapEventDetail(row: DbEvent, includePrivateCode: boolean) {
+export function mapEventDetail(row: DbEvent, includeOrganizerFields: boolean) {
   const base: Record<string, unknown> = {
     id: row.id,
     title: row.title,
@@ -294,6 +478,7 @@ export function mapEventDetail(row: DbEvent, includePrivateCode: boolean) {
     type: row.type,
     visibility: row.visibility,
     status: row.status,
+    sourceType: row.source_type,
     startAt: row.start_at,
     endAt: row.end_at,
     addressName: row.address_name,
@@ -302,8 +487,11 @@ export function mapEventDetail(row: DbEvent, includePrivateCode: boolean) {
     capacity: row.capacity,
     pricePerPerson: numFromDb(row.price_per_person)
   };
-  if (includePrivateCode && row.private_code) {
+  if (includeOrganizerFields && row.private_code) {
     base.privateCode = row.private_code;
+  }
+  if (includeOrganizerFields && row.reservation_id) {
+    base.reservationId = row.reservation_id;
   }
   return base as {
     id: string;
@@ -312,6 +500,7 @@ export function mapEventDetail(row: DbEvent, includePrivateCode: boolean) {
     type: string;
     visibility: string;
     status: string;
+    sourceType: string;
     startAt: string;
     endAt: string;
     addressName: string;
@@ -320,6 +509,7 @@ export function mapEventDetail(row: DbEvent, includePrivateCode: boolean) {
     capacity: number;
     pricePerPerson: number | null;
     privateCode?: string;
+    reservationId?: string;
   };
 }
 
@@ -342,8 +532,8 @@ export async function getEventDetail(
     });
   }
 
-  const includePrivateCode = shouldIncludePrivateCodeInDetail(row, auth);
-  return mapEventDetail(row, includePrivateCode);
+  const includeOrganizerFields = shouldIncludePrivateCodeInDetail(row, auth);
+  return mapEventDetail(row, includeOrganizerFields);
 }
 
 export async function updateEvent(pool: Pool, id: string, auth: AuthUser, input: PatchEventInput) {
@@ -447,7 +637,7 @@ export async function updateEvent(pool: Pool, id: string, auth: AuthUser, input:
       RETURNING
         id, organizer_id, category_id, title, description, type::text, visibility::text,
         source_type::text, status::text, start_at, end_at, address_name, street, number,
-        district, city, state, capacity, price_per_person::text, private_code
+        district, city, state, capacity, price_per_person::text, private_code, reservation_id
     `,
     [
       id,
@@ -493,14 +683,46 @@ export async function cancelEvent(pool: Pool, id: string, auth: AuthUser) {
     return { id: row.id, status: "CANCELLED" as const };
   }
 
-  await pool.query(
-    `
-      UPDATE events
-      SET status = 'CANCELLED', updated_at = now()
-      WHERE id = $1
-    `,
-    [id]
-  );
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    await client.query(
+      `
+        UPDATE events
+        SET status = 'CANCELLED', updated_at = now()
+        WHERE id = $1
+      `,
+      [id]
+    );
+
+    if (row.source_type === "ARENA_RESERVATION" && row.reservation_id) {
+      await client.query(
+        `
+          UPDATE arena_slots s
+          SET status = 'AVAILABLE', updated_at = now()
+          FROM reservations r
+          WHERE r.id = $1 AND s.id = r.slot_id
+        `,
+        [row.reservation_id]
+      );
+      await client.query(
+        `
+          UPDATE reservations
+          SET status = 'CANCELLED', updated_at = now()
+          WHERE id = $1 AND status = 'CONSUMED'
+        `,
+        [row.reservation_id]
+      );
+    }
+
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw err;
+  } finally {
+    client.release();
+  }
 
   return { id, status: "CANCELLED" as const };
 }

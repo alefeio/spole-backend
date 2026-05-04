@@ -5,6 +5,7 @@ import { sendFailure, sendSuccess } from "../../http/api-response";
 import { requireAuth } from "../../shared/middleware/require-auth";
 import { requireArenaOwnerOrAdmin } from "../../shared/middleware/require-arena-access";
 import { requireRoles } from "../../shared/middleware/require-roles";
+import { listArenaReservations } from "../reservations/service";
 import { listSlotsByArena } from "../slots/service";
 import { listSlotsQuerySchema } from "../slots/schemas";
 import { createArenaSchema, patchArenaSchema } from "./schemas";
@@ -19,6 +20,20 @@ function formatZodError(err: ZodError) {
 
 export function arenasRoutes(deps: AppDeps) {
   const router = Router();
+
+  router.get(
+    "/arenas/:arenaId/reservations",
+    requireAuth(deps),
+    requireArenaOwnerOrAdmin(deps, "arenaId"),
+    async (req, res, next) => {
+      try {
+        const data = await listArenaReservations(deps.pool, req.params.arenaId);
+        return sendSuccess(res, data);
+      } catch (err) {
+        next(err);
+      }
+    }
+  );
 
   router.get("/arenas/:arenaId/slots", async (req, res, next) => {
     try {

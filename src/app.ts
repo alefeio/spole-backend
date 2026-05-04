@@ -4,6 +4,7 @@ import { arenasRoutes } from "./modules/arenas/routes";
 import { authRoutes } from "./modules/auth/routes";
 import { categoriesRoutes } from "./modules/categories/routes";
 import { eventsRoutes } from "./modules/events/routes";
+import { reservationsRoutes } from "./modules/reservations/routes";
 import { slotsRoutes } from "./modules/slots/routes";
 import { spacesRoutes } from "./modules/spaces/routes";
 import { usersRoutes } from "./modules/users/routes";
@@ -33,6 +34,7 @@ export function createApp(deps: AppDeps) {
   app.use(usersRoutes(deps));
   app.use(categoriesRoutes(deps));
   app.use(eventsRoutes(deps));
+  app.use(reservationsRoutes(deps));
   app.use(spacesRoutes(deps));
   app.use(slotsRoutes(deps));
   app.use(arenasRoutes(deps));

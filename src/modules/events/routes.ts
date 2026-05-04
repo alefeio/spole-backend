@@ -5,7 +5,7 @@ import { sendFailure, sendSuccess } from "../../http/api-response";
 import { optionalAuth } from "../../shared/middleware/optional-auth";
 import { requireAuth } from "../../shared/middleware/require-auth";
 import { requireRoles } from "../../shared/middleware/require-roles";
-import { createEventSchema, listEventsQuerySchema, patchEventSchema } from "./schemas";
+import { listEventsQuerySchema, parseCreateEventBody, patchEventSchema } from "./schemas";
 import { cancelEvent, createEvent, getEventDetail, listPublicEvents, updateEvent } from "./service";
 
 function formatZodError(err: ZodError) {
@@ -48,7 +48,7 @@ export function eventsRoutes(deps: AppDeps) {
     requireRoles(["user", "arena_owner", "admin"]),
     async (req, res, next) => {
       try {
-        const parsed = createEventSchema.safeParse(req.body);
+        const parsed = parseCreateEventBody(req.body);
         if (!parsed.success) {
           return sendFailure(res, 400, "VALIDATION_ERROR", "Invalid request", formatZodError(parsed.error));
         }
