@@ -3,6 +3,8 @@ import express from "express";
 import { arenasRoutes } from "./modules/arenas/routes";
 import { authRoutes } from "./modules/auth/routes";
 import { categoriesRoutes } from "./modules/categories/routes";
+import { bookingsRoutes } from "./modules/bookings/routes";
+import { eventParticipantsRoutes } from "./modules/event-participants/routes";
 import { eventsRoutes } from "./modules/events/routes";
 import { reservationsRoutes } from "./modules/reservations/routes";
 import { slotsRoutes } from "./modules/slots/routes";
@@ -11,11 +13,13 @@ import { usersRoutes } from "./modules/users/routes";
 import { sendFailure } from "./http/api-response";
 import { errorMiddleware } from "./http/errors/error-middleware";
 import { healthRoutes } from "./http/routes/health";
+import type { RedisAppClient } from "./shared/cache/redis/redis";
 import type { Env } from "./shared/env/env";
 
 export type AppDeps = {
   pool: Pool;
   env: Env;
+  redis: RedisAppClient;
 };
 
 export function createApp(deps: AppDeps) {
@@ -34,6 +38,8 @@ export function createApp(deps: AppDeps) {
   app.use(usersRoutes(deps));
   app.use(categoriesRoutes(deps));
   app.use(eventsRoutes(deps));
+  app.use(eventParticipantsRoutes(deps));
+  app.use(bookingsRoutes(deps));
   app.use(reservationsRoutes(deps));
   app.use(spacesRoutes(deps));
   app.use(slotsRoutes(deps));

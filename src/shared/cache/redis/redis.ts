@@ -7,18 +7,20 @@ export type RedisConfig = {
   password?: string;
 };
 
-export function createRedisClient(config: RedisConfig) {
+export type RedisAppClient = ReturnType<typeof createClient>;
+
+export function createRedisClient(config: RedisConfig): RedisAppClient {
   const auth = config.password ? `:${encodeURIComponent(config.password)}@` : "";
   const url = `redis://${auth}${config.host}:${config.port}`;
   return createClient({ url });
 }
 
-export async function checkRedis(client: ReturnType<typeof createClient>) {
+export async function checkRedis(client: RedisAppClient) {
   await client.ping();
 }
 
 export function registerRedisHealth(
-  client: ReturnType<typeof createClient>,
+  client: RedisAppClient,
   logger: Logger,
   setHealthy: (ok: boolean) => void
 ) {

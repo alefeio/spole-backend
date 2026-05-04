@@ -1,8 +1,23 @@
 import type { Pool } from "pg";
+import type { RedisAppClient } from "../src/shared/cache/redis/redis";
 import { createApp, type AppDeps } from "../src/app";
 import type { Env } from "../src/shared/env/env";
 
-export function createTestDeps(params?: { pool?: Pool; env?: Partial<Env> }): AppDeps {
+export function createStubRedisClient(): RedisAppClient {
+  return {
+    connect: async () => undefined,
+    quit: async () => undefined,
+    on: () => undefined,
+    setEx: async () => undefined,
+    del: async () => 1
+  } as unknown as RedisAppClient;
+}
+
+export function createTestDeps(params?: {
+  pool?: Pool;
+  env?: Partial<Env>;
+  redis?: RedisAppClient;
+}): AppDeps {
   const env: Env = {
     port: 3000,
     nodeEnv: "test",
@@ -17,6 +32,7 @@ export function createTestDeps(params?: { pool?: Pool; env?: Partial<Env> }): Ap
       host: "localhost",
       port: 6379
     },
+    bookingTtlSeconds: 1800,
     jwt: {
       secret: "test-secret",
       issuer: "spole-api",
@@ -34,9 +50,13 @@ export function createTestDeps(params?: { pool?: Pool; env?: Partial<Env> }): Ap
       }
     } as unknown as Pool);
 
-  return { pool, env };
+  return { pool, env, redis: params?.redis ?? createStubRedisClient() };
 }
 
-export function createTestApp(params?: { pool?: Pool; env?: Partial<Env> }) {
+export function createTestApp(params?: {
+  pool?: Pool;
+  env?: Partial<Env>;
+  redis?: RedisAppClient;
+}) {
   return createApp(createTestDeps(params));
 }

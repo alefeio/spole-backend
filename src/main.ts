@@ -50,7 +50,7 @@ async function bootstrap() {
     process.exit(1);
   }
 
-  const app = createApp({ pool: postgres, env });
+  const app = createApp({ pool: postgres, env, redis });
 
   app.listen(env.port, () => {
     logger.info("listening", { port: env.port });

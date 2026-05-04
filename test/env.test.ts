@@ -35,6 +35,7 @@ describe("env", () => {
       expect(env.port).toBe(3001);
       expect(env.postgres.host).toBe("localhost");
       expect(env.redis.host).toBe("localhost");
+      expect(env.bookingTtlSeconds).toBe(1800);
       expect(env.jwt.secret).toBe("test-secret");
     } finally {
       process.env = prev;

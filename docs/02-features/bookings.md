@@ -1,5 +1,11 @@
 # Feature Spec — Bookings
 
+## Sprint 06 — recorte na API atual
+
+- Criação de booking em evento **pago** persiste **somente** a linha em `bookings` (sem `EventParticipant` no momento do booking); o participante confirmado fica para a sprint de **payments**.
+- **Redis**: chave `spole:booking:{id}` com TTL configurável (`BOOKING_TTL_SECONDS`, padrão **1800** = 30 min); **Postgres** guarda `expires_at`.
+- **Expiração**: promoção lazy de `RESERVED` → `EXPIRED` quando `expires_at <= now()` em fluxos que contam vagas ou listam bookings; chave Redis removida ao expirar ou cancelar.
+
 ## 1. Resumo
 Gestão da reserva temporária de vagas ou ingressos em eventos pagos, garantindo bloqueio por tempo limitado, prevenção de dupla compra e confirmação definitiva após pagamento aprovado.
 

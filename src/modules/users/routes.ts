@@ -3,6 +3,8 @@ import type { AppDeps } from "../../app";
 import { sendSuccess } from "../../http/api-response";
 import { requireAuth } from "../../shared/middleware/require-auth";
 import { requireRoles } from "../../shared/middleware/require-roles";
+import { listMyBookings } from "../bookings/service";
+import { listMyParticipants } from "../event-participants/service";
 import { getMe } from "./service";
 
 export function usersRoutes(deps: AppDeps) {
@@ -23,6 +25,34 @@ export function usersRoutes(deps: AppDeps) {
           role: user.role,
           status: user.status
         });
+      } catch (err) {
+        next(err);
+      }
+    }
+  );
+
+  router.get(
+    "/users/me/participants",
+    requireAuth(deps),
+    requireRoles(["user", "arena_owner", "admin"]),
+    async (req, res, next) => {
+      try {
+        const data = await listMyParticipants(deps, req.auth!);
+        return sendSuccess(res, data);
+      } catch (err) {
+        next(err);
+      }
+    }
+  );
+
+  router.get(
+    "/users/me/bookings",
+    requireAuth(deps),
+    requireRoles(["user", "arena_owner", "admin"]),
+    async (req, res, next) => {
+      try {
+        const data = await listMyBookings(deps, req.auth!);
+        return sendSuccess(res, data);
       } catch (err) {
         next(err);
       }

@@ -1,6 +1,7 @@
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../src/app";
+import { createStubRedisClient } from "./test-deps";
 import { createPostgresPool } from "../src/shared/db/postgres/postgres";
 import { runMigrations } from "../src/shared/db/migrate";
 import { loadEnv } from "../src/shared/env/env";
@@ -26,7 +27,7 @@ describe("sprint 03 — categorias e eventos (integração)", () => {
 
     pool = maybePool;
     await runMigrations(pool, logger);
-    app = createApp({ pool, env });
+    app = createApp({ pool, env, redis: createStubRedisClient() });
   });
 
   afterAll(async () => {

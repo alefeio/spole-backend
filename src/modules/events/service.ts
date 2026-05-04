@@ -10,7 +10,7 @@ import type {
   PatchEventInput
 } from "./schemas";
 
-type DbEvent = {
+export type DbEvent = {
   id: string;
   organizer_id: string;
   category_id: string;
@@ -92,7 +92,7 @@ async function assertCategoryForEvent(pool: Pool, categoryId: string) {
   }
 }
 
-async function loadEvent(pool: Pool, id: string): Promise<DbEvent | null> {
+export async function loadEvent(pool: Pool, id: string): Promise<DbEvent | null> {
   const res = await pool.query<DbEvent>(
     `
       SELECT
@@ -108,7 +108,7 @@ async function loadEvent(pool: Pool, id: string): Promise<DbEvent | null> {
   return res.rows[0] ?? null;
 }
 
-function canAccessEventDetail(
+export function canAccessEventDetail(
   row: DbEvent,
   auth: AuthUser | undefined,
   queryPrivateCode: string | undefined
