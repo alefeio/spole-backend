@@ -1,5 +1,6 @@
 import type { Pool } from "pg";
 import { AppError } from "../../shared/errors/app-error";
+import { generatePrivateEventCode, safeEqualStrings } from "../../shared/security/private-code";
 import type { AuthUser } from "../../types/auth";
 import type { CreateEventInput, ListEventsQuery, PatchEventInput } from "./schemas";
 
@@ -23,6 +24,7 @@ type DbEvent = {
   state: string;
   capacity: number;
   price_per_person: string | null;
+  private_code: string | null;
 };
 
 function numFromDb(v: string | null): number | null {
@@ -65,10 +67,21 @@ function validateEventRules(params: {
   }
 }
 
-async function assertCategoryExists(pool: Pool, categoryId: string) {
-  const r = await pool.query(`SELECT 1 FROM event_categories WHERE id = $1 LIMIT 1`, [categoryId]);
-  if (!r.rowCount) {
+async function assertCategoryForEvent(pool: Pool, categoryId: string) {
+  const r = await pool.query<{ status: string }>(
+    `SELECT status::text FROM event_categories WHERE id = $1 LIMIT 1`,
+    [categoryId]
+  );
+  const row = r.rows[0];
+  if (!row) {
     throw new AppError({ status: 422, code: "INVALID_CATEGORY", message: "Category not found" });
+  }
+  if (row.status !== "ACTIVE") {
+    throw new AppError({
+      status: 422,
+      code: "INACTIVE_CATEGORY",
+      message: "Category is not active"
+    });
   }
 }
 
@@ -78,7 +91,7 @@ async function loadEvent(pool: Pool, id: string): Promise<DbEvent | null> {
       SELECT
         id, organizer_id, category_id, title, description, type::text, visibility::text,
         source_type::text, status::text, start_at, end_at, address_name, street, number,
-        district, city, state, capacity, price_per_person::text
+        district, city, state, capacity, price_per_person::text, private_code
       FROM events
       WHERE id = $1
       LIMIT 1
@@ -88,21 +101,44 @@ async function loadEvent(pool: Pool, id: string): Promise<DbEvent | null> {
   return res.rows[0] ?? null;
 }
 
-function canAccessEventDetail(row: DbEvent, auth?: AuthUser): boolean {
+function canAccessEventDetail(
+  row: DbEvent,
+  auth: AuthUser | undefined,
+  queryPrivateCode: string | undefined
+): boolean {
   const ownerOrAdmin = auth && (auth.role === "admin" || auth.id === row.organizer_id);
   if (ownerOrAdmin) return true;
 
   const publicReadable =
     row.visibility === "PUBLIC" && (row.status === "PUBLISHED" || row.status === "CANCELLED");
-  return publicReadable;
+  if (publicReadable) return true;
+
+  if (row.visibility === "PRIVATE" && row.private_code && queryPrivateCode) {
+    const a = row.private_code.trim();
+    const b = queryPrivateCode.trim();
+    if (a.length > 0 && b.length > 0 && safeEqualStrings(a, b)) return true;
+  }
+
+  return false;
+}
+
+function shouldIncludePrivateCodeInDetail(row: DbEvent, auth: AuthUser | undefined): boolean {
+  return Boolean(auth && (auth.role === "admin" || auth.id === row.organizer_id));
 }
 
 export async function createEvent(pool: Pool, organizerId: string, input: CreateEventInput) {
-  await assertCategoryExists(pool, input.categoryId);
+  await assertCategoryForEvent(pool, input.categoryId);
 
   const startAt = new Date(input.startAt);
   const endAt = new Date(input.endAt);
   const price = input.type === "PAID" ? input.pricePerPerson ?? null : null;
+
+  const privateCode =
+    input.visibility === "PRIVATE"
+      ? (input.privateCode?.trim() && input.privateCode.trim().length >= 8
+          ? input.privateCode.trim()
+          : generatePrivateEventCode())
+      : null;
 
   validateEventRules({
     type: input.type,
@@ -116,13 +152,14 @@ export async function createEvent(pool: Pool, organizerId: string, input: Create
     `
       INSERT INTO events (
         organizer_id, category_id, title, description, type, visibility, source_type, status,
-        start_at, end_at, address_name, street, number, district, city, state, capacity, price_per_person
+        start_at, end_at, address_name, street, number, district, city, state, capacity, price_per_person,
+        private_code
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
       RETURNING
         id, organizer_id, category_id, title, description, type::text, visibility::text,
         source_type::text, status::text, start_at, end_at, address_name, street, number,
-        district, city, state, capacity, price_per_person::text
+        district, city, state, capacity, price_per_person::text, private_code
     `,
     [
       organizerId,
@@ -142,7 +179,8 @@ export async function createEvent(pool: Pool, organizerId: string, input: Create
       input.city,
       input.state,
       input.capacity,
-      price
+      price,
+      privateCode
     ]
   );
 
@@ -151,17 +189,21 @@ export async function createEvent(pool: Pool, organizerId: string, input: Create
     throw new AppError({ status: 500, code: "EVENT_CREATE_FAILED", message: "Event create failed" });
   }
 
-  return {
+  const base = {
     id: row.id,
     title: row.title,
     type: row.type,
     visibility: row.visibility,
     status: row.status
   };
+  if (row.visibility === "PRIVATE" && row.private_code) {
+    return { ...base, privateCode: row.private_code };
+  }
+  return base;
 }
 
 export async function listPublicEvents(pool: Pool, query: ListEventsQuery) {
-  const conditions = [`e.visibility = 'PUBLIC'`, `e.status = 'PUBLISHED'`];
+  const conditions = [`e.visibility = 'PUBLIC'`, `e.status = 'PUBLISHED'`, `c.status = 'ACTIVE'`];
   const params: unknown[] = [];
   let i = 1;
 
@@ -188,9 +230,15 @@ export async function listPublicEvents(pool: Pool, query: ListEventsQuery) {
 
   const whereSql = conditions.join(" AND ");
   const offset = (query.page - 1) * query.limit;
+  const orderDir = query.order === "desc" ? "DESC" : "ASC";
 
   const countRes = await pool.query<{ count: string }>(
-    `SELECT COUNT(*)::text AS count FROM events e WHERE ${whereSql}`,
+    `
+      SELECT COUNT(*)::text AS count
+      FROM events e
+      INNER JOIN event_categories c ON c.id = e.category_id
+      WHERE ${whereSql}
+    `,
     params
   );
   const total = Number(countRes.rows[0]?.count ?? 0);
@@ -204,10 +252,11 @@ export async function listPublicEvents(pool: Pool, query: ListEventsQuery) {
       SELECT
         e.id, e.organizer_id, e.category_id, e.title, e.description, e.type::text, e.visibility::text,
         e.source_type::text, e.status::text, e.start_at, e.end_at, e.address_name, e.street, e.number,
-        e.district, e.city, e.state, e.capacity, e.price_per_person::text
+        e.district, e.city, e.state, e.capacity, e.price_per_person::text, e.private_code
       FROM events e
+      INNER JOIN event_categories c ON c.id = e.category_id
       WHERE ${whereSql}
-      ORDER BY e.start_at ASC
+      ORDER BY e.start_at ${orderDir}
       LIMIT $${limitIdx} OFFSET $${offsetIdx}
     `,
     params
@@ -230,13 +279,15 @@ export async function listPublicEvents(pool: Pool, query: ListEventsQuery) {
     meta: {
       page: query.page,
       limit: query.limit,
-      total
+      total,
+      sort: query.sort,
+      order: query.order
     }
   };
 }
 
-export function mapEventDetail(row: DbEvent) {
-  return {
+export function mapEventDetail(row: DbEvent, includePrivateCode: boolean) {
+  const base: Record<string, unknown> = {
     id: row.id,
     title: row.title,
     description: row.description,
@@ -251,15 +302,39 @@ export function mapEventDetail(row: DbEvent) {
     capacity: row.capacity,
     pricePerPerson: numFromDb(row.price_per_person)
   };
+  if (includePrivateCode && row.private_code) {
+    base.privateCode = row.private_code;
+  }
+  return base as {
+    id: string;
+    title: string;
+    description: string | null;
+    type: string;
+    visibility: string;
+    status: string;
+    startAt: string;
+    endAt: string;
+    addressName: string;
+    city: string;
+    state: string;
+    capacity: number;
+    pricePerPerson: number | null;
+    privateCode?: string;
+  };
 }
 
-export async function getEventDetail(pool: Pool, id: string, auth?: AuthUser) {
+export async function getEventDetail(
+  pool: Pool,
+  id: string,
+  auth: AuthUser | undefined,
+  queryPrivateCode: string | undefined
+) {
   const row = await loadEvent(pool, id);
   if (!row) {
     throw new AppError({ status: 404, code: "EVENT_NOT_FOUND", message: "Event not found" });
   }
 
-  if (!canAccessEventDetail(row, auth)) {
+  if (!canAccessEventDetail(row, auth, queryPrivateCode)) {
     throw new AppError({
       status: 403,
       code: "FORBIDDEN",
@@ -267,7 +342,8 @@ export async function getEventDetail(pool: Pool, id: string, auth?: AuthUser) {
     });
   }
 
-  return mapEventDetail(row);
+  const includePrivateCode = shouldIncludePrivateCodeInDetail(row, auth);
+  return mapEventDetail(row, includePrivateCode);
 }
 
 export async function updateEvent(pool: Pool, id: string, auth: AuthUser, input: PatchEventInput) {
@@ -289,7 +365,20 @@ export async function updateEvent(pool: Pool, id: string, auth: AuthUser, input:
   }
 
   if (input.categoryId) {
-    await assertCategoryExists(pool, input.categoryId);
+    await assertCategoryForEvent(pool, input.categoryId);
+  }
+
+  const mergedVisibility = (input.visibility ?? row.visibility) as "PUBLIC" | "PRIVATE";
+
+  let mergedPrivateCode = row.private_code;
+  if (input.privateCode !== undefined) {
+    mergedPrivateCode = input.privateCode.trim();
+  }
+
+  if (mergedVisibility === "PUBLIC") {
+    mergedPrivateCode = null;
+  } else if (!mergedPrivateCode || mergedPrivateCode.trim().length < 8) {
+    mergedPrivateCode = generatePrivateEventCode();
   }
 
   const merged = {
@@ -297,7 +386,7 @@ export async function updateEvent(pool: Pool, id: string, auth: AuthUser, input:
     title: input.title ?? row.title,
     description: input.description === undefined ? row.description : input.description,
     type: (input.type ?? row.type) as "FREE" | "PAID",
-    visibility: (input.visibility ?? row.visibility) as "PUBLIC" | "PRIVATE",
+    visibility: mergedVisibility,
     status: (input.status ?? row.status) as "DRAFT" | "PUBLISHED" | "CANCELLED",
     start_at: input.startAt ?? row.start_at,
     end_at: input.endAt ?? row.end_at,
@@ -313,7 +402,8 @@ export async function updateEvent(pool: Pool, id: string, auth: AuthUser, input:
         ? row.price_per_person
         : input.pricePerPerson == null
           ? null
-          : String(input.pricePerPerson)
+          : String(input.pricePerPerson),
+    private_code: mergedPrivateCode
   };
 
   if (merged.status === "CANCELLED") {
@@ -351,12 +441,13 @@ export async function updateEvent(pool: Pool, id: string, auth: AuthUser, input:
         state = $15,
         capacity = $16,
         price_per_person = $17,
+        private_code = $18,
         updated_at = now()
       WHERE id = $1
       RETURNING
         id, organizer_id, category_id, title, description, type::text, visibility::text,
         source_type::text, status::text, start_at, end_at, address_name, street, number,
-        district, city, state, capacity, price_per_person::text
+        district, city, state, capacity, price_per_person::text, private_code
     `,
     [
       id,
@@ -375,7 +466,8 @@ export async function updateEvent(pool: Pool, id: string, auth: AuthUser, input:
       merged.city,
       merged.state,
       merged.capacity,
-      priceNum
+      priceNum,
+      merged.private_code
     ]
   );
 

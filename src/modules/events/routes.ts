@@ -33,7 +33,9 @@ export function eventsRoutes(deps: AppDeps) {
 
   router.get("/events/:id", optionalAuth(deps), async (req, res, next) => {
     try {
-      const detail = await getEventDetail(deps.pool, req.params.id, req.auth);
+      const raw = req.query.privateCode;
+      const privateCode = typeof raw === "string" ? raw : undefined;
+      const detail = await getEventDetail(deps.pool, req.params.id, req.auth, privateCode);
       return sendSuccess(res, detail);
     } catch (err) {
       next(err);

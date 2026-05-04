@@ -2,6 +2,8 @@ import { z } from "zod";
 
 const isoDateTime = z.string().datetime({ offset: true });
 
+const privateCodeSchema = z.string().min(8).max(128);
+
 export const createEventSchema = z
   .object({
     categoryId: z.string().uuid(),
@@ -20,7 +22,8 @@ export const createEventSchema = z
     city: z.string().min(1).max(200),
     state: z.string().min(2).max(2),
     capacity: z.number().int().positive(),
-    pricePerPerson: z.number().positive().optional().nullable()
+    pricePerPerson: z.number().positive().optional().nullable(),
+    privateCode: privateCodeSchema.optional()
   })
   .superRefine((data, ctx) => {
     const start = new Date(data.startAt);
@@ -41,6 +44,13 @@ export const createEventSchema = z
         code: "custom",
         path: ["pricePerPerson"],
         message: "Free events must not set a positive price"
+      });
+    }
+    if (data.visibility === "PUBLIC" && data.privateCode != null && String(data.privateCode).trim() !== "") {
+      ctx.addIssue({
+        code: "custom",
+        path: ["privateCode"],
+        message: "privateCode must not be set for public events"
       });
     }
   });
@@ -64,9 +74,19 @@ export const patchEventSchema = z
     city: z.string().min(1).max(200).optional(),
     state: z.string().min(2).max(2).optional(),
     capacity: z.number().int().positive().optional(),
-    pricePerPerson: z.number().nonnegative().nullable().optional()
+    pricePerPerson: z.number().nonnegative().nullable().optional(),
+    privateCode: privateCodeSchema.optional()
   })
-  .refine((o) => Object.keys(o).length > 0, { message: "At least one field is required" });
+  .refine((o) => Object.keys(o).length > 0, { message: "At least one field is required" })
+  .superRefine((data, ctx) => {
+    if (data.visibility === "PUBLIC" && data.privateCode != null && String(data.privateCode).trim() !== "") {
+      ctx.addIssue({
+        code: "custom",
+        path: ["privateCode"],
+        message: "privateCode must not be set when visibility is public"
+      });
+    }
+  });
 
 export type PatchEventInput = z.infer<typeof patchEventSchema>;
 
@@ -79,7 +99,9 @@ export const listEventsQuerySchema = z.object({
   city: z.preprocess(qEmpty, z.string().min(1).max(200)).optional(),
   dateFrom: z.preprocess(qEmpty, isoDateTime).optional(),
   dateTo: z.preprocess(qEmpty, isoDateTime).optional(),
-  type: z.preprocess(qEmpty, z.enum(["FREE", "PAID"])).optional()
+  type: z.preprocess(qEmpty, z.enum(["FREE", "PAID"])).optional(),
+  sort: z.preprocess(qEmpty, z.enum(["startAt"])).optional().default("startAt"),
+  order: z.preprocess(qEmpty, z.enum(["asc", "desc"])).optional().default("asc")
 });
 
 export type ListEventsQuery = z.infer<typeof listEventsQuerySchema>;

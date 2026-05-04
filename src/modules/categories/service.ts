@@ -1,8 +1,16 @@
 import type { Pool } from "pg";
 import { AppError } from "../../shared/errors/app-error";
-import type { CreateCategoryInput, PatchCategoryInput } from "./schemas";
+import type { CategoryStatus, CreateCategoryInput, PatchCategoryInput } from "./schemas";
 
 export type EventCategoryRow = {
+  id: string;
+  name: string;
+  slug: string;
+  icon: string | null;
+  status: CategoryStatus;
+};
+
+export type PublicCategoryRow = {
   id: string;
   name: string;
   slug: string;
@@ -10,14 +18,16 @@ export type EventCategoryRow = {
 };
 
 export async function createCategory(pool: Pool, input: CreateCategoryInput): Promise<EventCategoryRow> {
+  const status: CategoryStatus = input.status ?? "ACTIVE";
+
   try {
     const res = await pool.query<EventCategoryRow>(
       `
-        INSERT INTO event_categories (name, slug, icon)
-        VALUES ($1, $2, $3)
-        RETURNING id, name, slug::text, icon
+        INSERT INTO event_categories (name, slug, icon, status)
+        VALUES ($1, $2, $3, $4)
+        RETURNING id, name, slug::text, icon, status::text
       `,
-      [input.name, input.slug, input.icon ?? null]
+      [input.name, input.slug, input.icon ?? null, status]
     );
     const row = res.rows[0];
     if (!row) {
@@ -33,11 +43,12 @@ export async function createCategory(pool: Pool, input: CreateCategoryInput): Pr
   }
 }
 
-export async function listCategories(pool: Pool): Promise<EventCategoryRow[]> {
-  const res = await pool.query<EventCategoryRow>(
+export async function listPublicCategories(pool: Pool): Promise<PublicCategoryRow[]> {
+  const res = await pool.query<PublicCategoryRow>(
     `
       SELECT id, name, slug::text, icon
       FROM event_categories
+      WHERE status = 'ACTIVE'
       ORDER BY name ASC
     `
   );
@@ -47,7 +58,7 @@ export async function listCategories(pool: Pool): Promise<EventCategoryRow[]> {
 export async function getCategoryById(pool: Pool, id: string): Promise<EventCategoryRow | null> {
   const res = await pool.query<EventCategoryRow>(
     `
-      SELECT id, name, slug::text, icon
+      SELECT id, name, slug::text, icon, status::text
       FROM event_categories
       WHERE id = $1
       LIMIT 1
@@ -70,16 +81,17 @@ export async function updateCategory(
   const name = input.name ?? existing.name;
   const slug = input.slug ?? existing.slug;
   const icon = input.icon === undefined ? existing.icon : input.icon;
+  const status = input.status ?? existing.status;
 
   try {
     const res = await pool.query<EventCategoryRow>(
       `
         UPDATE event_categories
-        SET name = $2, slug = $3, icon = $4, updated_at = now()
+        SET name = $2, slug = $3, icon = $4, status = $5, updated_at = now()
         WHERE id = $1
-        RETURNING id, name, slug::text, icon
+        RETURNING id, name, slug::text, icon, status::text
       `,
-      [id, name, slug, icon]
+      [id, name, slug, icon, status]
     );
     const row = res.rows[0];
     if (!row) {

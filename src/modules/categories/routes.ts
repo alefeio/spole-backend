@@ -5,7 +5,7 @@ import { sendFailure, sendSuccess } from "../../http/api-response";
 import { requireAuth } from "../../shared/middleware/require-auth";
 import { requireRoles } from "../../shared/middleware/require-roles";
 import { createCategorySchema, patchCategorySchema } from "./schemas";
-import { createCategory, deleteCategory, listCategories, updateCategory } from "./service";
+import { createCategory, deleteCategory, listPublicCategories, updateCategory } from "./service";
 
 function formatZodError(err: ZodError) {
   return err.issues.map((i) => ({
@@ -19,7 +19,7 @@ export function categoriesRoutes(deps: AppDeps) {
 
   router.get("/categories", async (_req, res, next) => {
     try {
-      const rows = await listCategories(deps.pool);
+      const rows = await listPublicCategories(deps.pool);
       return sendSuccess(res, rows);
     } catch (err) {
       next(err);

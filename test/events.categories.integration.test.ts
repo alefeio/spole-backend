@@ -104,7 +104,7 @@ describe("sprint 03 — categorias e eventos (integração)", () => {
       .set("Authorization", `Bearer ${adminToken}`)
       .send({ name: "Futebol", slug, icon: "football" })
       .expect(201);
-    expect(createCat.body.data).toMatchObject({ name: "Futebol", slug });
+    expect(createCat.body.data).toMatchObject({ name: "Futebol", slug, status: "ACTIVE" });
 
     const dupSlug = await request(app)
       .post("/categories")
@@ -147,7 +147,7 @@ describe("sprint 03 — categorias e eventos (integração)", () => {
     expect(paid.body.data).toMatchObject({ type: "PAID", visibility: "PUBLIC", status: "PUBLISHED" });
     const eventPaidId = paid.body.data.id as string;
 
-    await request(app)
+    const privateCreate = await request(app)
       .post("/events")
       .set("Authorization", `Bearer ${userToken}`)
       .send({
@@ -168,30 +168,83 @@ describe("sprint 03 — categorias e eventos (integração)", () => {
         capacity: 10
       })
       .expect(201);
+    const privateId = privateCreate.body.data.id as string;
+    const privateCode = privateCreate.body.data.privateCode as string;
+    expect(privateId.length).toBeGreaterThan(10);
+    expect(privateCode.length).toBeGreaterThanOrEqual(8);
 
     const listEvents = await request(app).get("/events").expect(200);
     expect(listEvents.body.success).toBe(true);
-    expect(listEvents.body.meta).toMatchObject({ page: 1, limit: 10 });
+    expect(listEvents.body.meta).toMatchObject({
+      page: 1,
+      limit: 10,
+      sort: "startAt",
+      order: "asc"
+    });
     const ids = (listEvents.body.data as { id: string }[]).map((e) => e.id);
     expect(ids).toContain(eventPaidId);
+    expect(ids).not.toContain(privateId);
 
     const detail = await request(app).get(`/events/${eventPaidId}`).expect(200);
     expect(detail.body.data.title).toBe("Pelada paga");
 
-    const privateRow = await pool.query<{ id: string }>(
-      `SELECT id FROM events WHERE title = 'Rascunho privado' LIMIT 1`
-    );
-    const privateId = privateRow.rows[0]?.id;
-    expect(privateId).toBeTruthy();
-
     const privAnon = await request(app).get(`/events/${privateId}`).expect(403);
     expect(privAnon.body.success).toBe(false);
+
+    const privWrongCode = await request(app)
+      .get(`/events/${privateId}`)
+      .query({ privateCode: "codigo-errado-999" })
+      .expect(403);
+    expect(privWrongCode.body.success).toBe(false);
+
+    const privWithCode = await request(app)
+      .get(`/events/${privateId}`)
+      .query({ privateCode })
+      .expect(200);
+    expect(privWithCode.body.data.visibility).toBe("PRIVATE");
+    expect(privWithCode.body.data.privateCode).toBeUndefined();
 
     const privOwner = await request(app)
       .get(`/events/${privateId}`)
       .set("Authorization", `Bearer ${userToken}`)
       .expect(200);
     expect(privOwner.body.data.visibility).toBe("PRIVATE");
+    expect(typeof privOwner.body.data.privateCode).toBe("string");
+
+    await request(app)
+      .patch(`/categories/${categoryId}`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ status: "INACTIVE" })
+      .expect(200);
+
+    const inactiveEv = await request(app)
+      .post("/events")
+      .set("Authorization", `Bearer ${userToken}`)
+      .send({
+        categoryId,
+        title: "Não deve criar",
+        type: "FREE",
+        visibility: "PUBLIC",
+        sourceType: "FREE_LOCATION",
+        status: "DRAFT",
+        startAt: start,
+        endAt: end,
+        addressName: "X",
+        street: "Y",
+        number: "1",
+        district: "Z",
+        city: "Belém",
+        state: "PA",
+        capacity: 5
+      })
+      .expect(422);
+    expect(inactiveEv.body.error.code).toBe("INACTIVE_CATEGORY");
+
+    await request(app)
+      .patch(`/categories/${categoryId}`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ status: "ACTIVE" })
+      .expect(200);
 
     const patchOther = await request(app)
       .patch(`/events/${eventPaidId}`)
