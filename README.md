@@ -67,7 +67,11 @@ Variáveis JWT necessárias (veja `.env.example`):
 
 **Cache público (Sprint 08):** `PUBLIC_READ_CACHE_TTL_SECONDS` (opcional, default 60) controla o TTL em Redis das respostas de `GET /events` e `GET /categories`. Se o Redis falhar, a API responde a partir do Postgres. A invalidação usa uma versão global de catálogo (`INCR` em Redis), sem `KEYS`.
 
-**Listagens autenticadas:** `GET /users/me/bookings` e `GET /users/me/payments` **não** fazem parte do escopo obrigatório de paginação da Sprint 08; permanecem sem `page`/`limit` até decisão futura.
+**Notificações (Sprint 09):** internas e persistidas; `GET /users/me/notifications` (paginado) e `PATCH /notifications/:id/read`. Gatilhos atuais: pagamento aprovado e cancelamento de booking pelo próprio usuário.
+
+**Listagens autenticadas paginadas:** `GET /users/me/notifications`, `GET /users/me/bookings` e `GET /users/me/payments` aceitam `page` e `limit` (default 1 e 10) e retornam `meta` com `total`.
+
+**Listagem sem paginação obrigatória (Sprint 09):** `GET /users/me/participants` permanece como array em `data`, sem `meta` — decisão documentada.
 
 Migrações SQL ficam em `db/migrations/` e são aplicadas automaticamente no bootstrap quando a API sobe.
 

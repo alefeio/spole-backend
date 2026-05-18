@@ -1,12 +1,22 @@
 import { Router } from "express";
+import type { ZodError } from "zod";
 import type { AppDeps } from "../../app";
-import { sendSuccess } from "../../http/api-response";
+import { sendFailure, sendSuccess } from "../../http/api-response";
+import { paginationQuerySchema } from "../../shared/http/pagination";
 import { requireAuth } from "../../shared/middleware/require-auth";
 import { requireRoles } from "../../shared/middleware/require-roles";
 import { listMyBookings } from "../bookings/service";
 import { listMyParticipants } from "../event-participants/service";
+import { listMyNotifications } from "../notifications/service";
 import { listMyPayments } from "../payments/service";
 import { getMe } from "./service";
+
+function formatZodError(err: ZodError) {
+  return err.issues.map((i) => ({
+    path: i.path.join("."),
+    message: i.message
+  }));
+}
 
 export function usersRoutes(deps: AppDeps) {
   const router = Router();
@@ -47,13 +57,35 @@ export function usersRoutes(deps: AppDeps) {
   );
 
   router.get(
+    "/users/me/notifications",
+    requireAuth(deps),
+    requireRoles(["user", "arena_owner", "admin"]),
+    async (req, res, next) => {
+      try {
+        const parsed = paginationQuerySchema.safeParse(req.query);
+        if (!parsed.success) {
+          return sendFailure(res, 400, "VALIDATION_ERROR", "Invalid query", formatZodError(parsed.error));
+        }
+        const { data, meta } = await listMyNotifications(deps, req.auth!, parsed.data);
+        return sendSuccess(res, data, meta);
+      } catch (err) {
+        next(err);
+      }
+    }
+  );
+
+  router.get(
     "/users/me/bookings",
     requireAuth(deps),
     requireRoles(["user", "arena_owner", "admin"]),
     async (req, res, next) => {
       try {
-        const data = await listMyBookings(deps, req.auth!);
-        return sendSuccess(res, data);
+        const parsed = paginationQuerySchema.safeParse(req.query);
+        if (!parsed.success) {
+          return sendFailure(res, 400, "VALIDATION_ERROR", "Invalid query", formatZodError(parsed.error));
+        }
+        const { data, meta } = await listMyBookings(deps, req.auth!, parsed.data);
+        return sendSuccess(res, data, meta);
       } catch (err) {
         next(err);
       }
@@ -66,8 +98,12 @@ export function usersRoutes(deps: AppDeps) {
     requireRoles(["user", "arena_owner", "admin"]),
     async (req, res, next) => {
       try {
-        const data = await listMyPayments(deps, req.auth!);
-        return sendSuccess(res, data);
+        const parsed = paginationQuerySchema.safeParse(req.query);
+        if (!parsed.success) {
+          return sendFailure(res, 400, "VALIDATION_ERROR", "Invalid query", formatZodError(parsed.error));
+        }
+        const { data, meta } = await listMyPayments(deps, req.auth!, parsed.data);
+        return sendSuccess(res, data, meta);
       } catch (err) {
         next(err);
       }

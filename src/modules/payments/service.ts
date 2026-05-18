@@ -1,10 +1,14 @@
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import type { AppDeps } from "../../app";
 import { AppError } from "../../shared/errors/app-error";
+import type { PaginationMeta, PaginationQuery } from "../../shared/http/pagination";
+import { createLogger } from "../../shared/logger/logger";
 import type { AuthUser } from "../../types/auth";
 import { bookingRedisKey } from "../bookings/booking-redis";
 import { expireStaleBookings } from "../bookings/service";
+import { insertNotification } from "../notifications/service";
 
+const log = createLogger("payments");
 const MOCK_PROVIDER = "mock-provider";
 const ALLOWED_METHODS = new Set(["PIX"]);
 
@@ -337,10 +341,23 @@ export async function processPaymentWebhook(deps: AppDeps, body: WebhookBody) {
       [booking.event_id, pay.user_id]
     );
 
+    const evRes = await client.query<{ title: string }>(`SELECT title FROM events WHERE id = $1`, [
+      booking.event_id
+    ]);
+    const eventTitle = evRes.rows[0]?.title ?? "evento";
+    const notifId = await insertNotification(client, {
+      userId: pay.user_id,
+      title: "Pagamento confirmado",
+      message: `Sua vaga foi confirmada no evento "${eventTitle}".`,
+      type: "PAYMENT_CONFIRMED"
+    });
+
     await client.query("COMMIT");
 
     const rk = bookingRedisKey(pay.booking_id);
     await redis.del(rk).catch(() => undefined);
+
+    log.info("payment confirmed", { paymentId: pay.id, bookingId: pay.booking_id, notificationId: notifId });
 
     return { status: "processed" as const };
   } catch (err) {
@@ -359,7 +376,14 @@ export async function processPaymentWebhook(deps: AppDeps, body: WebhookBody) {
   }
 }
 
-export async function listMyPayments(deps: AppDeps, auth: AuthUser) {
+export async function listMyPayments(deps: AppDeps, auth: AuthUser, query: PaginationQuery) {
+  const countRes = await deps.pool.query<{ count: string }>(
+    `SELECT COUNT(*)::text AS count FROM payments WHERE user_id = $1`,
+    [auth.id]
+  );
+  const total = Number(countRes.rows[0]?.count ?? 0);
+  const offset = (query.page - 1) * query.limit;
+
   const res = await deps.pool.query<{
     id: string;
     booking_id: string;
@@ -379,21 +403,26 @@ export async function listMyPayments(deps: AppDeps, auth: AuthUser) {
       FROM payments
       WHERE user_id = $1
       ORDER BY created_at DESC
+      LIMIT $2 OFFSET $3
     `,
-    [auth.id]
+    [auth.id, query.limit, offset]
   );
-  return res.rows.map((r) => ({
-    id: r.id,
-    bookingId: r.booking_id,
-    status: r.status,
-    method: r.method,
-    provider: r.provider,
-    grossAmount: Number(r.gross_amount),
-    feeAmount: Number(r.fee_amount),
-    netAmount: Number(r.net_amount),
-    paidAt: r.paid_at,
-    createdAt: r.created_at
-  }));
+
+  return {
+    data: res.rows.map((r) => ({
+      id: r.id,
+      bookingId: r.booking_id,
+      status: r.status,
+      method: r.method,
+      provider: r.provider,
+      grossAmount: Number(r.gross_amount),
+      feeAmount: Number(r.fee_amount),
+      netAmount: Number(r.net_amount),
+      paidAt: r.paid_at,
+      createdAt: r.created_at
+    })),
+    meta: { page: query.page, limit: query.limit, total } satisfies PaginationMeta
+  };
 }
 
 export async function getPaymentById(deps: AppDeps, auth: AuthUser, paymentId: string) {

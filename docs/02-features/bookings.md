@@ -14,7 +14,11 @@
 
 ## Sprint 08 — nota de listagem
 
-- `GET /users/me/bookings` permanece **sem** paginação obrigatória (`page`/`limit`); decisão documentada alinhada ao escopo da Sprint 08 (prioridade é `GET /events` público).
+- Prioridade de paginação pública em `GET /events` (Sprint 08).
+
+## Sprint 09 — nota de listagem
+
+- `GET /users/me/bookings` passa a exigir contrato paginado (`data` + `meta` com `page`, `limit`, `total`).
 
 ## 1. Resumo
 Gestão da reserva temporária de vagas ou ingressos em eventos pagos, garantindo bloqueio por tempo limitado, prevenção de dupla compra e confirmação definitiva após pagamento aprovado.

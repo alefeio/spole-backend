@@ -4,6 +4,7 @@ import { arenasRoutes } from "./modules/arenas/routes";
 import { authRoutes } from "./modules/auth/routes";
 import { categoriesRoutes } from "./modules/categories/routes";
 import { bookingsRoutes } from "./modules/bookings/routes";
+import { notificationsRoutes } from "./modules/notifications/routes";
 import { paymentsRoutes } from "./modules/payments/routes";
 import { eventParticipantsRoutes } from "./modules/event-participants/routes";
 import { eventsRoutes } from "./modules/events/routes";
@@ -41,6 +42,7 @@ export function createApp(deps: AppDeps) {
   app.use(eventsRoutes(deps));
   app.use(eventParticipantsRoutes(deps));
   app.use(bookingsRoutes(deps));
+  app.use(notificationsRoutes(deps));
   app.use(paymentsRoutes(deps));
   app.use(reservationsRoutes(deps));
   app.use(spacesRoutes(deps));

@@ -1,9 +1,14 @@
 import type { Pool, PoolClient } from "pg";
 import type { AppDeps } from "../../app";
 import { AppError } from "../../shared/errors/app-error";
+import type { PaginationMeta, PaginationQuery } from "../../shared/http/pagination";
+import { createLogger } from "../../shared/logger/logger";
 import type { AuthUser } from "../../types/auth";
+import { insertNotification } from "../notifications/service";
 import { canAccessEventDetail, type DbEvent } from "../events/service";
 import { bookingRedisKey } from "./booking-redis";
+
+const log = createLogger("bookings");
 
 type PgConn = Pool | PoolClient;
 
@@ -240,16 +245,17 @@ export async function cancelBooking(deps: AppDeps, bookingId: string, auth: Auth
   try {
     await client.query("BEGIN");
 
-    const bRes = await client.query<{ status: string }>(
-      `SELECT status::text FROM bookings WHERE id = $1 FOR UPDATE`,
+    const bRes = await client.query<{ status: string; event_id: string; user_id: string }>(
+      `SELECT status::text, event_id, user_id FROM bookings WHERE id = $1 FOR UPDATE`,
       [bookingId]
     );
-    const st = bRes.rows[0]?.status;
+    const row = bRes.rows[0];
+    const st = row?.status;
     if (st === "CANCELLED") {
       await client.query("COMMIT");
       return { id: bookingId, status: "CANCELLED" as const };
     }
-    if (st !== "RESERVED") {
+    if (st !== "RESERVED" || !row) {
       await client.query("ROLLBACK");
       throw new AppError({
         status: 422,
@@ -258,19 +264,39 @@ export async function cancelBooking(deps: AppDeps, bookingId: string, auth: Auth
       });
     }
 
-    await client.query(
+    const upd = await client.query<{ id: string }>(
       `
         UPDATE bookings
         SET status = 'CANCELLED', updated_at = now()
-        WHERE id = $1
+        WHERE id = $1 AND status = 'RESERVED'
+        RETURNING id
       `,
       [bookingId]
     );
+    if (!upd.rows[0]) {
+      await client.query("ROLLBACK");
+      throw new AppError({
+        status: 422,
+        code: "BOOKING_NOT_CANCELLABLE",
+        message: "Booking cannot be cancelled in its current state"
+      });
+    }
+
+    const evRes = await client.query<{ title: string }>(`SELECT title FROM events WHERE id = $1`, [row.event_id]);
+    const eventTitle = evRes.rows[0]?.title ?? "evento";
+    const notifId = await insertNotification(client, {
+      userId: row.user_id,
+      title: "Reserva cancelada",
+      message: `Sua reserva temporária no evento "${eventTitle}" foi cancelada.`,
+      type: "BOOKING_CANCELLED"
+    });
 
     await client.query("COMMIT");
 
     const rk = bookingRedisKey(bookingId);
     await redis.del(rk).catch(() => undefined);
+
+    log.info("booking cancelled", { bookingId, notificationId: notifId });
 
     return { id: bookingId, status: "CANCELLED" as const };
   } catch (err) {
@@ -281,8 +307,16 @@ export async function cancelBooking(deps: AppDeps, bookingId: string, auth: Auth
   }
 }
 
-export async function listMyBookings(deps: AppDeps, auth: AuthUser) {
+export async function listMyBookings(deps: AppDeps, auth: AuthUser, query: PaginationQuery) {
   await expireStaleBookings(deps.pool, deps.redis, { userId: auth.id });
+
+  const countRes = await deps.pool.query<{ count: string }>(
+    `SELECT COUNT(*)::text AS count FROM bookings WHERE user_id = $1`,
+    [auth.id]
+  );
+  const total = Number(countRes.rows[0]?.count ?? 0);
+  const offset = (query.page - 1) * query.limit;
+
   const res = await deps.pool.query<{
     id: string;
     event_id: string;
@@ -296,15 +330,20 @@ export async function listMyBookings(deps: AppDeps, auth: AuthUser) {
       FROM bookings
       WHERE user_id = $1
       ORDER BY created_at DESC
+      LIMIT $2 OFFSET $3
     `,
-    [auth.id]
+    [auth.id, query.limit, offset]
   );
-  return res.rows.map((r) => ({
-    id: r.id,
-    eventId: r.event_id,
-    userId: r.user_id,
-    status: r.status,
-    reservedAt: r.reserved_at,
-    expiresAt: r.expires_at
-  }));
+
+  return {
+    data: res.rows.map((r) => ({
+      id: r.id,
+      eventId: r.event_id,
+      userId: r.user_id,
+      status: r.status,
+      reservedAt: r.reserved_at,
+      expiresAt: r.expires_at
+    })),
+    meta: { page: query.page, limit: query.limit, total } satisfies PaginationMeta
+  };
 }
