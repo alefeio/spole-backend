@@ -1,5 +1,6 @@
 import type { Pool } from "pg";
 import express from "express";
+import { adminRoutes } from "./modules/admin/routes";
 import { arenasRoutes } from "./modules/arenas/routes";
 import { authRoutes } from "./modules/auth/routes";
 import { categoriesRoutes } from "./modules/categories/routes";
@@ -48,6 +49,7 @@ export function createApp(deps: AppDeps) {
   app.use(spacesRoutes(deps));
   app.use(slotsRoutes(deps));
   app.use(arenasRoutes(deps));
+  app.use(adminRoutes(deps));
 
   app.use((_req, res) => {
     return sendFailure(res, 404, "RESOURCE_NOT_FOUND", "Resource not found");

@@ -75,6 +75,8 @@ Variáveis JWT necessárias (veja `.env.example`):
 
 **Reservas de arena (Sprint 10):** nova reserva nasce `PENDING` com slot em `HOLD` e `expires_at` (Postgres, `RESERVATION_TTL_SECONDS`). Pagamento inicial: `POST /reservations/:reservationId/payments`; confirmação: `POST /reservation-payments/webhook` com header `X-Spole-Reservation-Payment-Webhook-Secret`. Ocorrência recorrente: `POST /reservation-occurrences/:occurrenceId/payments`. Se `min_reservation_payment_percent = 0`, a reserva confirma sem criar `Payment`. O webhook de booking (`POST /payments/webhook`) não processa pagamentos de reserva.
 
+**Admin (Sprint 11):** rotas sob `/admin/*` exigem role `admin`. Listagens paginadas de usuários, arenas, eventos, reservas, bookings, payments e `audit-logs`. Mutações: status de usuário (`ACTIVE`/`SUSPENDED`/`INACTIVE`), arena (`ACTIVE`/`INACTIVE`), cancelamento de evento (`CANCELLED` via lógica existente). `SUSPENDED` e `INACTIVE` bloqueiam login e rotas autenticadas.
+
 Migrações SQL ficam em `db/migrations/` e são aplicadas automaticamente no bootstrap quando a API sobe.
 
 ## Testes

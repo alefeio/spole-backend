@@ -44,7 +44,7 @@ export function verifyAccessToken(env: Env, token: string): JwtClaims {
   if (role !== "user" && role !== "arena_owner" && role !== "admin") {
     throw new Error("Invalid token role");
   }
-  if (status !== "ACTIVE" && status !== "SUSPENDED") {
+  if (status !== "ACTIVE" && status !== "SUSPENDED" && status !== "INACTIVE") {
     throw new Error("Invalid token status");
   }
 

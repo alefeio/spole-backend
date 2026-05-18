@@ -1,5 +1,5 @@
 export type UserRole = "user" | "arena_owner" | "admin";
-export type UserStatus = "ACTIVE" | "SUSPENDED";
+export type UserStatus = "ACTIVE" | "SUSPENDED" | "INACTIVE";
 
 export type AuthUser = {
   id: string;

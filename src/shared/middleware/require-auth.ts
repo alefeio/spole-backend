@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from "express";
 import type { AppDeps } from "../../app";
 import { sendFailure } from "../../http/api-response";
 import { verifyAccessToken } from "../config/jwt";
+import { isUserAccessBlocked } from "../auth/user-access";
 import type { AuthUser } from "../../types/auth";
 
 export function requireAuth(deps: AppDeps) {
@@ -38,8 +39,8 @@ export function requireAuth(deps: AppDeps) {
         return sendFailure(res, 401, "UNAUTHORIZED", "Invalid token");
       }
 
-      if (user.status === "SUSPENDED") {
-        return sendFailure(res, 403, "USER_SUSPENDED", "User is suspended");
+      if (isUserAccessBlocked(user.status)) {
+        return sendFailure(res, 403, "USER_SUSPENDED", "User access is blocked");
       }
 
       if (user.role !== claims.role || user.status !== claims.status) {

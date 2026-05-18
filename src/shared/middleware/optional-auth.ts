@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import type { AppDeps } from "../../app";
 import { verifyAccessToken } from "../config/jwt";
+import { isUserAccessBlocked } from "../auth/user-access";
 import type { AuthUser } from "../../types/auth";
 
 /**
@@ -41,7 +42,7 @@ export function optionalAuth(deps: AppDeps) {
         return next();
       }
 
-      if (user.status === "SUSPENDED") {
+      if (isUserAccessBlocked(user.status)) {
         return next();
       }
 

@@ -3,6 +3,7 @@ import type { Pool } from "pg";
 import { AppError } from "../../shared/errors/app-error";
 import type { Env } from "../../shared/env/env";
 import { signAccessToken } from "../../shared/config/jwt";
+import { isUserAccessBlocked } from "../../shared/auth/user-access";
 import type { UserRole, UserStatus } from "../../types/auth";
 import type { LoginInput, RegisterInput } from "./schemas";
 
@@ -92,8 +93,8 @@ export async function loginUser(pool: Pool, env: Env, input: LoginInput) {
     });
   }
 
-  if (user.status === "SUSPENDED") {
-    throw new AppError({ status: 403, code: "USER_SUSPENDED", message: "User is suspended" });
+  if (isUserAccessBlocked(user.status)) {
+    throw new AppError({ status: 403, code: "USER_SUSPENDED", message: "User access is blocked" });
   }
 
   const ok = await bcrypt.compare(input.password, user.password_hash);
