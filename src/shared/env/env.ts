@@ -15,6 +15,8 @@ export type Env = {
   };
   /** TTL da reserva temporária de booking (segundos). Default 1800 = 30 min. */
   bookingTtlSeconds: number;
+  /** TTL do pagamento inicial da reserva de arena (segundos). Default 1800 = 30 min. */
+  reservationTtlSeconds: number;
   jwt: {
     secret: string;
     issuer: string;
@@ -65,6 +67,7 @@ export function loadEnv(): Env {
       password: process.env.REDIS_PASSWORD || undefined
     },
     bookingTtlSeconds: numberEnv("BOOKING_TTL_SECONDS", 1800),
+    reservationTtlSeconds: numberEnv("RESERVATION_TTL_SECONDS", 1800),
     jwt: {
       secret: required("JWT_SECRET"),
       issuer: process.env.JWT_ISSUER ?? "spole-api",

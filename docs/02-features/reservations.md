@@ -1,5 +1,13 @@
 # Feature Spec — Reservations
 
+## Sprint 10 — recorte na API atual
+
+- Nova reserva nasce em `PENDING`, slot em `HOLD`, com `expires_at` (Postgres; `RESERVATION_TTL_SECONDS`).
+- Confirmação financeira via `POST /reservations/:id/payments` + `POST /reservation-payments/webhook`.
+- `min_reservation_payment_percent = 0` confirma automaticamente sem `Payment`.
+- Recorrência semanal (`RECURRING`): após confirmação, gera a próxima ocorrência; inadimplência libera slot (`RELEASED`) quando `due_at` passa (24h antes do horário).
+- Pagamento de ocorrência futura: `POST /reservation-occurrences/:occurrenceId/payments`.
+
 ## 1. Resumo
 Gestão das reservas de horários de arena feitas por organizadores, permitindo transformar slots disponíveis em reservas confirmadas que poderão originar eventos na plataforma.
 

@@ -169,6 +169,24 @@ async function teardownSprint05World(w: Sprint05World) {
     [emails]
   );
   await w.pool.query(
+    `DELETE FROM payments WHERE user_id IN (SELECT id FROM users WHERE email = ANY($1::text[]))`,
+    [emails]
+  );
+  await w.pool.query(
+    `DELETE FROM reservation_occurrences WHERE recurrence_id IN (
+      SELECT rr.id FROM reservation_recurrences rr
+      INNER JOIN reservations r ON r.id = rr.reservation_id
+      WHERE r.organizer_id IN (SELECT id FROM users WHERE email = ANY($1::text[]))
+    )`,
+    [emails]
+  );
+  await w.pool.query(
+    `DELETE FROM reservation_recurrences WHERE reservation_id IN (
+      SELECT id FROM reservations WHERE organizer_id IN (SELECT id FROM users WHERE email = ANY($1::text[]))
+    )`,
+    [emails]
+  );
+  await w.pool.query(
     `DELETE FROM reservations WHERE organizer_id IN (SELECT id FROM users WHERE email = ANY($1::text[]))`,
     [emails]
   );
@@ -464,6 +482,23 @@ describe("sprint 05 — reservas, slots e eventos em arena (integração)", () =
     const emails = [adminEmail, ownerEmail, orgEmail, otherEmail];
     await pool.query(
       `DELETE FROM events WHERE organizer_id IN (SELECT id FROM users WHERE email = ANY($1::text[]))`,
+      [emails]
+    );
+    await pool.query(`DELETE FROM payments WHERE user_id IN (SELECT id FROM users WHERE email = ANY($1::text[]))`, [
+      emails
+    ]);
+    await pool.query(
+      `DELETE FROM reservation_occurrences WHERE recurrence_id IN (
+        SELECT rr.id FROM reservation_recurrences rr
+        INNER JOIN reservations r ON r.id = rr.reservation_id
+        WHERE r.organizer_id IN (SELECT id FROM users WHERE email = ANY($1::text[]))
+      )`,
+      [emails]
+    );
+    await pool.query(
+      `DELETE FROM reservation_recurrences WHERE reservation_id IN (
+        SELECT id FROM reservations WHERE organizer_id IN (SELECT id FROM users WHERE email = ANY($1::text[]))
+      )`,
       [emails]
     );
     await pool.query(

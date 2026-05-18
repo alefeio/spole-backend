@@ -32,7 +32,7 @@ export function reservationsRoutes(deps: AppDeps) {
         if (!parsed.success) {
           return sendFailure(res, 400, "VALIDATION_ERROR", "Invalid request", formatZodError(parsed.error));
         }
-        const created = await createReservation(deps.pool, req.auth!.id, parsed.data);
+        const created = await createReservation(deps, req.auth!.id, parsed.data);
         return sendSuccess(res, created, undefined, 201);
       } catch (err) {
         next(err);
@@ -60,7 +60,7 @@ export function reservationsRoutes(deps: AppDeps) {
     requireRoles(["user", "arena_owner", "admin"]),
     async (req, res, next) => {
       try {
-        const data = await getReservationById(deps.pool, req.params.id, req.auth!);
+        const data = await getReservationById(deps, req.params.id, req.auth!);
         return sendSuccess(res, data);
       } catch (err) {
         next(err);

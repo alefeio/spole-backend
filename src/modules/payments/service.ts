@@ -1,4 +1,4 @@
-import { randomUUID, timingSafeEqual } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import type { AppDeps } from "../../app";
 import { AppError } from "../../shared/errors/app-error";
 import type { PaginationMeta, PaginationQuery } from "../../shared/http/pagination";
@@ -7,23 +7,16 @@ import type { AuthUser } from "../../types/auth";
 import { bookingRedisKey } from "../bookings/booking-redis";
 import { expireStaleBookings } from "../bookings/service";
 import { insertNotification } from "../notifications/service";
+import { validatePaymentMethodProvider, type CreatePaymentBody } from "./shared";
+
+export { validateWebhookSecret, type CreatePaymentBody } from "./shared";
+export {
+  createPendingPaymentForReservation,
+  createPendingPaymentForOccurrence,
+  processReservationPaymentWebhook
+} from "./reservation-payments";
 
 const log = createLogger("payments");
-const MOCK_PROVIDER = "mock-provider";
-const ALLOWED_METHODS = new Set(["PIX"]);
-
-export function validateWebhookSecret(headerValue: string | undefined, expected: string): boolean {
-  if (!headerValue || !expected) return false;
-  const a = Buffer.from(headerValue.trim(), "utf8");
-  const b = Buffer.from(expected, "utf8");
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(a, b);
-}
-
-export type CreatePaymentBody = {
-  method: string;
-  provider: string;
-};
 
 export async function createPendingPaymentForBooking(
   deps: AppDeps,
@@ -32,21 +25,15 @@ export async function createPendingPaymentForBooking(
   body: CreatePaymentBody
 ) {
   const { pool } = deps;
-  const method = typeof body.method === "string" ? body.method.trim().toUpperCase() : "";
-  const provider = typeof body.provider === "string" ? body.provider.trim() : "";
-
-  if (!ALLOWED_METHODS.has(method)) {
+  const parsed = validatePaymentMethodProvider(
+    typeof body.method === "string" ? body.method : "",
+    typeof body.provider === "string" ? body.provider : ""
+  );
+  if (!parsed.ok) {
     throw new AppError({
       status: 422,
-      code: "INVALID_PAYMENT_METHOD",
-      message: "Unsupported payment method"
-    });
-  }
-  if (provider !== MOCK_PROVIDER) {
-    throw new AppError({
-      status: 422,
-      code: "INVALID_PAYMENT_PROVIDER",
-      message: "Unsupported payment provider"
+      code: parsed.code,
+      message: parsed.code === "INVALID_PAYMENT_METHOD" ? "Unsupported payment method" : "Unsupported payment provider"
     });
   }
 
@@ -152,7 +139,7 @@ export async function createPendingPaymentForBooking(
         RETURNING id, booking_id, status::text, method, provider, provider_reference,
           gross_amount::text, fee_amount::text, net_amount::text
       `,
-      [booking.user_id, bookingId, method, provider, providerReference, gross, feeAmount, netAmount]
+      [booking.user_id, bookingId, parsed.method, parsed.provider, providerReference, gross, feeAmount, netAmount]
     );
 
     const row = ins.rows[0];
@@ -220,12 +207,17 @@ export async function processPaymentWebhook(deps: AppDeps, body: WebhookBody) {
         SELECT id, user_id, booking_id, status::text
         FROM payments
         WHERE provider_reference = $1
+          AND booking_id IS NOT NULL
         FOR UPDATE
       `,
       [ref]
     );
     const pay = pRes.rows[0];
     if (!pay) {
+      await client.query("ROLLBACK");
+      throw new AppError({ status: 404, code: "PAYMENT_NOT_FOUND", message: "Payment not found" });
+    }
+    if (!pay.booking_id) {
       await client.query("ROLLBACK");
       throw new AppError({ status: 404, code: "PAYMENT_NOT_FOUND", message: "Payment not found" });
     }
@@ -386,7 +378,9 @@ export async function listMyPayments(deps: AppDeps, auth: AuthUser, query: Pagin
 
   const res = await deps.pool.query<{
     id: string;
-    booking_id: string;
+    booking_id: string | null;
+    reservation_id: string | null;
+    reservation_occurrence_id: string | null;
     status: string;
     method: string;
     provider: string;
@@ -397,7 +391,7 @@ export async function listMyPayments(deps: AppDeps, auth: AuthUser, query: Pagin
     created_at: string;
   }>(
     `
-      SELECT id, booking_id, status::text, method, provider,
+      SELECT id, booking_id, reservation_id, reservation_occurrence_id, status::text, method, provider,
         gross_amount::text, fee_amount::text, net_amount::text,
         paid_at, created_at
       FROM payments
@@ -412,6 +406,8 @@ export async function listMyPayments(deps: AppDeps, auth: AuthUser, query: Pagin
     data: res.rows.map((r) => ({
       id: r.id,
       bookingId: r.booking_id,
+      reservationId: r.reservation_id,
+      reservationOccurrenceId: r.reservation_occurrence_id,
       status: r.status,
       method: r.method,
       provider: r.provider,
@@ -429,7 +425,9 @@ export async function getPaymentById(deps: AppDeps, auth: AuthUser, paymentId: s
   const res = await deps.pool.query<{
     id: string;
     user_id: string;
-    booking_id: string;
+    booking_id: string | null;
+    reservation_id: string | null;
+    reservation_occurrence_id: string | null;
     status: string;
     method: string;
     provider: string;
@@ -442,8 +440,8 @@ export async function getPaymentById(deps: AppDeps, auth: AuthUser, paymentId: s
     updated_at: string;
   }>(
     `
-      SELECT id, user_id, booking_id, status::text, method, provider, provider_reference,
-        gross_amount::text, fee_amount::text, net_amount::text,
+      SELECT id, user_id, booking_id, reservation_id, reservation_occurrence_id, status::text, method, provider,
+        provider_reference, gross_amount::text, fee_amount::text, net_amount::text,
         paid_at, created_at, updated_at
       FROM payments
       WHERE id = $1
@@ -461,6 +459,8 @@ export async function getPaymentById(deps: AppDeps, auth: AuthUser, paymentId: s
     id: row.id,
     userId: row.user_id,
     bookingId: row.booking_id,
+    reservationId: row.reservation_id,
+    reservationOccurrenceId: row.reservation_occurrence_id,
     status: row.status,
     method: row.method,
     provider: row.provider,
