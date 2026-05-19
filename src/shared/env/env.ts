@@ -27,6 +27,12 @@ export type Env = {
   paymentsWebhookSecret: string;
   /** TTL do cache de leitura pública (GET /events, GET /categories), em segundos. */
   publicReadCacheTtlSeconds: number;
+  rateLimitAuth: { windowSeconds: number; maxRequests: number };
+  rateLimitPublicRead: { windowSeconds: number; maxRequests: number };
+  rateLimitAuthenticated: { windowSeconds: number; maxRequests: number };
+  rateLimitWebhook: { windowSeconds: number; maxRequests: number };
+  /** TTL de registros de idempotência de cliente (segundos). */
+  idempotencyTtlSeconds: number;
 };
 
 function required(name: string): string {
@@ -75,6 +81,23 @@ export function loadEnv(): Env {
       expiresIn: process.env.JWT_EXPIRES_IN ?? "7d"
     },
     paymentsWebhookSecret: required("PAYMENTS_WEBHOOK_SECRET"),
-    publicReadCacheTtlSeconds: numberEnv("PUBLIC_READ_CACHE_TTL_SECONDS", 60)
+    publicReadCacheTtlSeconds: numberEnv("PUBLIC_READ_CACHE_TTL_SECONDS", 60),
+    rateLimitAuth: {
+      windowSeconds: numberEnv("RATE_LIMIT_AUTH_WINDOW_SECONDS", 60),
+      maxRequests: numberEnv("RATE_LIMIT_AUTH_MAX_REQUESTS", 20)
+    },
+    rateLimitPublicRead: {
+      windowSeconds: numberEnv("RATE_LIMIT_PUBLIC_READ_WINDOW_SECONDS", 60),
+      maxRequests: numberEnv("RATE_LIMIT_PUBLIC_READ_MAX_REQUESTS", 120)
+    },
+    rateLimitAuthenticated: {
+      windowSeconds: numberEnv("RATE_LIMIT_AUTHENTICATED_WINDOW_SECONDS", 60),
+      maxRequests: numberEnv("RATE_LIMIT_AUTHENTICATED_MAX_REQUESTS", 60)
+    },
+    rateLimitWebhook: {
+      windowSeconds: numberEnv("RATE_LIMIT_WEBHOOK_WINDOW_SECONDS", 60),
+      maxRequests: numberEnv("RATE_LIMIT_WEBHOOK_MAX_REQUESTS", 1000)
+    },
+    idempotencyTtlSeconds: numberEnv("IDEMPOTENCY_TTL_SECONDS", 86400)
   };
 }

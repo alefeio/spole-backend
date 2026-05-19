@@ -2,6 +2,7 @@ import { Router } from "express";
 import type { ZodError } from "zod";
 import type { AppDeps } from "../../app";
 import { sendFailure, sendSuccess } from "../../http/api-response";
+import { buildRateLimiters } from "../../shared/security/rate-limit-profiles";
 import { loginUser, registerUser } from "./service";
 import { loginSchema, registerSchema } from "./schemas";
 
@@ -14,8 +15,9 @@ function formatZodError(err: ZodError) {
 
 export function authRoutes(deps: AppDeps) {
   const router = Router();
+  const rateLimit = buildRateLimiters(deps);
 
-  router.post("/auth/register", async (req, res, next) => {
+  router.post("/auth/register", rateLimit.authRegister, async (req, res, next) => {
     try {
       const parsed = registerSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -45,7 +47,7 @@ export function authRoutes(deps: AppDeps) {
     }
   });
 
-  router.post("/auth/login", async (req, res, next) => {
+  router.post("/auth/login", rateLimit.authLogin, async (req, res, next) => {
     try {
       const parsed = loginSchema.safeParse(req.body);
       if (!parsed.success) {

@@ -1,3 +1,5 @@
+import { getRequestId } from "../context/request-context";
+
 type LogLevel = "info" | "warn" | "error";
 
 function safeJson(value: unknown) {
@@ -16,7 +18,9 @@ export type Logger = {
 
 export function createLogger(scope: string): Logger {
   const log = (level: LogLevel, message: string, context?: Record<string, unknown>) => {
-    const ctx = context ? ` ${safeJson(context)}` : "";
+    const requestId = getRequestId();
+    const merged = requestId ? { requestId, ...context } : context;
+    const ctx = merged ? ` ${safeJson(merged)}` : "";
     const line = `[spole-api] [${scope}] ${level.toUpperCase()} ${message}${ctx}`;
     console[level === "info" ? "log" : level](line);
   };

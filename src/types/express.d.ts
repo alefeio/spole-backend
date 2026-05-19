@@ -6,6 +6,7 @@ declare global {
     interface Request {
       auth?: AuthUser;
       pg?: Pool;
+      requestId?: string;
     }
   }
 }

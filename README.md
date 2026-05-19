@@ -77,6 +77,8 @@ Variáveis JWT necessárias (veja `.env.example`):
 
 **Admin (Sprint 11):** rotas sob `/admin/*` exigem role `admin`. Listagens paginadas de usuários, arenas, eventos, reservas, bookings, payments e `audit-logs`. Mutações: status de usuário (`ACTIVE`/`SUSPENDED`/`INACTIVE`), arena (`ACTIVE`/`INACTIVE`), cancelamento de evento (`CANCELLED` via lógica existente). `SUSPENDED` e `INACTIVE` bloqueiam login e rotas autenticadas.
 
+**Segurança operacional (Sprint 12):** toda resposta inclui `X-Request-Id` (reutiliza o header do cliente se válido; senão gera UUID). Logs incluem o mesmo identificador. Rate limiting com Redis nos endpoints prioritários (auth, `GET /events`, criação de booking/payments e webhooks com limite permissivo). Se o Redis falhar no rate limit, a API segue (**fail-open** com log). Endpoints críticos de criação aceitam `Idempotency-Key` **opcional**; replay devolve a mesma resposta persistida; chave reutilizada com payload diferente → `409 IDEMPOTENCY_KEY_REUSED`. Variáveis: `RATE_LIMIT_*`, `IDEMPOTENCY_TTL_SECONDS` (veja `.env.example`).
+
 Migrações SQL ficam em `db/migrations/` e são aplicadas automaticamente no bootstrap quando a API sobe.
 
 ## Testes

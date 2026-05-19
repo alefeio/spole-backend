@@ -18,6 +18,7 @@ import { errorMiddleware } from "./http/errors/error-middleware";
 import { healthRoutes } from "./http/routes/health";
 import type { RedisAppClient } from "./shared/cache/redis/redis";
 import type { Env } from "./shared/env/env";
+import { requestIdMiddleware } from "./shared/middleware/request-id";
 
 export type AppDeps = {
   pool: Pool;
@@ -29,6 +30,8 @@ export function createApp(deps: AppDeps) {
   const app = express();
 
   app.disable("x-powered-by");
+  app.set("trust proxy", true);
+  app.use(requestIdMiddleware());
   app.use(express.json());
 
   app.use((req, _res, next) => {

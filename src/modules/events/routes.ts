@@ -7,6 +7,7 @@ import { requireAuth } from "../../shared/middleware/require-auth";
 import { requireRoles } from "../../shared/middleware/require-roles";
 import { bumpPublicCatalogVersion } from "../../shared/cache/public-catalog-cache";
 import { listEventsQuerySchema, parseCreateEventBody, patchEventSchema } from "./schemas";
+import { buildRateLimiters } from "../../shared/security/rate-limit-profiles";
 import { cancelEvent, createEvent, getEventDetail, listPublicEvents, updateEvent } from "./service";
 
 function formatZodError(err: ZodError) {
@@ -18,8 +19,9 @@ function formatZodError(err: ZodError) {
 
 export function eventsRoutes(deps: AppDeps) {
   const router = Router();
+  const rateLimit = buildRateLimiters(deps);
 
-  router.get("/events", async (req, res, next) => {
+  router.get("/events", rateLimit.publicEvents, async (req, res, next) => {
     try {
       const parsed = listEventsQuerySchema.safeParse(req.query);
       if (!parsed.success) {
