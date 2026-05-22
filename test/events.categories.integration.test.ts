@@ -213,6 +213,9 @@ describe("sprint 03 — categorias e eventos (integração)", () => {
       .expect(200);
     expect(privOwner.body.data.visibility).toBe("PRIVATE");
     expect(typeof privOwner.body.data.privateCode).toBe("string");
+    expect(privOwner.body.data.categoryId).toBe(categoryId);
+    expect(privOwner.body.data.street).toBe("Rua A");
+    expect(privOwner.body.data.locationReadOnly).toBe(false);
 
     await request(app)
       .patch(`/categories/${categoryId}`)

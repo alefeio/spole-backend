@@ -452,6 +452,18 @@ describe("sprint 05 — reservas, slots e eventos em arena (integração)", () =
     expect(detail.body.data.sourceType).toBe("ARENA_RESERVATION");
     expect(detail.body.data.startAt).toBe(slotStart);
     expect(detail.body.data.endAt).toBe(slotEnd);
+    expect(detail.body.data.locationReadOnly).toBeUndefined();
+
+    const detailOwner = await request(app)
+      .get(`/events/${eventId}`)
+      .set("Authorization", `Bearer ${orgToken}`)
+      .expect(200);
+    expect(detailOwner.body.data).toMatchObject({
+      sourceType: "ARENA_RESERVATION",
+      reservationId,
+      locationReadOnly: true
+    });
+    expect(detailOwner.body.data.street).toBeTruthy();
 
     await request(app).delete(`/events/${eventId}`).set("Authorization", `Bearer ${orgToken}`).expect(200);
 

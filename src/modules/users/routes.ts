@@ -5,6 +5,8 @@ import { sendFailure, sendSuccess } from "../../http/api-response";
 import { paginationQuerySchema } from "../../shared/http/pagination";
 import { requireAuth } from "../../shared/middleware/require-auth";
 import { requireRoles } from "../../shared/middleware/require-roles";
+import { listMyOrganizerEvents } from "../events/service";
+import { listMyOrganizerEventsQuerySchema } from "../events/schemas";
 import { listMyBookings } from "../bookings/service";
 import { listMyParticipants } from "../event-participants/service";
 import { listMyNotifications } from "../notifications/service";
@@ -36,6 +38,24 @@ export function usersRoutes(deps: AppDeps) {
           role: user.role,
           status: user.status
         });
+      } catch (err) {
+        next(err);
+      }
+    }
+  );
+
+  router.get(
+    "/users/me/events",
+    requireAuth(deps),
+    requireRoles(["user", "arena_owner", "admin"]),
+    async (req, res, next) => {
+      try {
+        const parsed = listMyOrganizerEventsQuerySchema.safeParse(req.query);
+        if (!parsed.success) {
+          return sendFailure(res, 400, "VALIDATION_ERROR", "Invalid query", formatZodError(parsed.error));
+        }
+        const { data, meta } = await listMyOrganizerEvents(deps.pool, req.auth!.id, parsed.data);
+        return sendSuccess(res, data, meta);
       } catch (err) {
         next(err);
       }

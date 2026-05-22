@@ -148,9 +148,22 @@ O evento pode ser salvo como `DRAFT` antes de ser publicado.
 ## 12. Saídas
 - evento criado
 - evento atualizado
-- lista de eventos
-- detalhes do evento
+- lista de eventos públicos (`GET /events`)
+- lista de eventos do organizador autenticado (`GET /users/me/events`)
+- detalhes do evento (`GET /events/:id`, payload contextual)
 - confirmação de cancelamento lógico
+
+### 12.1 `GET /users/me/events` (organizador autenticado)
+- JWT obrigatório; roles: `user`, `arena_owner`, `admin`
+- Retorna apenas eventos com `organizerId` igual ao usuário autenticado
+- Inclui `DRAFT`, `PUBLISHED`, `CANCELLED` e visibilidades `PUBLIC`/`PRIVATE`
+- Paginação e filtros: `page`, `limit`, `q`, `status`, `visibility`, `type`, `sourceType`, `categoryId`, `dateFrom`, `dateTo`, `sort` (`startAt` | `createdAt` | `updatedAt`), `order`
+- **Não** retorna `privateCode` nos itens da listagem
+- Sem cache de catálogo público
+
+### 12.2 `GET /events/:id` — payloads
+- **Visitante / não-dono:** campos de leitura pública (sem `privateCode`, `categoryId`, endereço completo, `reservationId`)
+- **Organizador ou admin:** payload de edição com `categoryId`, endereço completo, `privateCode` (quando privado), `reservationId` (quando arena), `locationReadOnly` (`true` para `ARENA_RESERVATION`)
 
 ## 13. Validações
 - organizerId válido
@@ -190,6 +203,9 @@ O evento pode ser salvo como `DRAFT` antes de ser publicado.
 - 422 regra de domínio inválida
 
 ## 18. Critérios de aceite
+- [x] Organizador consegue listar seus próprios eventos via `GET /users/me/events`
+- [x] Organizador recebe detalhe completo para edição em `GET /events/:id`
+- [x] `privateCode` não vaza em listagem nem para visitante/não-dono no detalhe
 - [x] Organizador consegue criar evento gratuito
 - [x] Organizador consegue criar evento pago com preço válido
 - [x] Organizador consegue criar evento público

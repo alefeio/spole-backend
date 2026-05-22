@@ -148,3 +148,23 @@ export const listEventsQuerySchema = z.object({
 });
 
 export type ListEventsQuery = z.infer<typeof listEventsQuerySchema>;
+
+export const listMyOrganizerEventsQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(10),
+  q: z.preprocess(qEmpty, z.string().trim().min(1).max(200)).optional(),
+  status: z.preprocess(qEmpty, z.enum(["DRAFT", "PUBLISHED", "CANCELLED"])).optional(),
+  visibility: z.preprocess(qEmpty, z.enum(["PUBLIC", "PRIVATE"])).optional(),
+  type: z.preprocess(qEmpty, z.enum(["FREE", "PAID"])).optional(),
+  sourceType: z.preprocess(qEmpty, z.enum(["FREE_LOCATION", "ARENA_RESERVATION"])).optional(),
+  categoryId: z.preprocess(qEmpty, z.string().uuid()).optional(),
+  dateFrom: z.preprocess(qEmpty, isoDateTime).optional(),
+  dateTo: z.preprocess(qEmpty, isoDateTime).optional(),
+  sort: z
+    .preprocess(qEmpty, z.enum(["startAt", "createdAt", "updatedAt"]))
+    .optional()
+    .default("updatedAt"),
+  order: z.preprocess(qEmpty, z.enum(["asc", "desc"])).optional().default("desc")
+});
+
+export type ListMyOrganizerEventsQuery = z.infer<typeof listMyOrganizerEventsQuerySchema>;

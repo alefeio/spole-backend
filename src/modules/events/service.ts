@@ -14,6 +14,7 @@ import type {
   CreateEventFreeLocationInput,
   CreateEventInput,
   ListEventsQuery,
+  ListMyOrganizerEventsQuery,
   PatchEventInput
 } from "./schemas";
 
@@ -141,7 +142,7 @@ export function canAccessEventDetail(
   return false;
 }
 
-function shouldIncludePrivateCodeInDetail(row: DbEvent, auth: AuthUser | undefined): boolean {
+export function shouldIncludeOrganizerEditDetail(row: DbEvent, auth: AuthUser | undefined): boolean {
   return Boolean(auth && (auth.role === "admin" || auth.id === row.organizer_id));
 }
 
@@ -499,8 +500,131 @@ export async function listPublicEvents(deps: AppDeps, query: ListEventsQuery): P
   return getReadThroughJson(deps.redis, key, ttl, () => listPublicEventsFromDb(deps.pool, query));
 }
 
-export function mapEventDetail(row: DbEvent, includeOrganizerFields: boolean) {
-  const base: Record<string, unknown> = {
+type DbEventOrganizerListRow = DbEvent & {
+  created_at: string;
+  updated_at: string;
+};
+
+function mapOrganizerEventListItem(row: DbEventOrganizerListRow) {
+  return {
+    id: row.id,
+    title: row.title,
+    status: row.status,
+    visibility: row.visibility,
+    type: row.type,
+    sourceType: row.source_type,
+    categoryId: row.category_id,
+    startAt: row.start_at,
+    endAt: row.end_at,
+    city: row.city,
+    state: row.state,
+    capacity: row.capacity,
+    pricePerPerson: numFromDb(row.price_per_person),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
+function organizerEventsSortColumn(sort: ListMyOrganizerEventsQuery["sort"]): string {
+  switch (sort) {
+    case "startAt":
+      return "e.start_at";
+    case "createdAt":
+      return "e.created_at";
+    case "updatedAt":
+    default:
+      return "e.updated_at";
+  }
+}
+
+export async function listMyOrganizerEvents(pool: Pool, organizerId: string, query: ListMyOrganizerEventsQuery) {
+  const conditions = [`e.organizer_id = $1`];
+  const params: unknown[] = [organizerId];
+  let i = 2;
+
+  if (query.q) {
+    const pat = `%${escapeIlikePattern(query.q)}%`;
+    const iTitle = i;
+    const iDesc = i + 1;
+    conditions.push(
+      `(e.title ILIKE $${iTitle} ESCAPE '\\' OR (e.description IS NOT NULL AND e.description ILIKE $${iDesc} ESCAPE '\\'))`
+    );
+    params.push(pat, pat);
+    i += 2;
+  }
+  if (query.status) {
+    conditions.push(`e.status = $${i++}::event_status`);
+    params.push(query.status);
+  }
+  if (query.visibility) {
+    conditions.push(`e.visibility = $${i++}::event_visibility`);
+    params.push(query.visibility);
+  }
+  if (query.type) {
+    conditions.push(`e.type = $${i++}::event_type`);
+    params.push(query.type);
+  }
+  if (query.sourceType) {
+    conditions.push(`e.source_type = $${i++}::event_source_type`);
+    params.push(query.sourceType);
+  }
+  if (query.categoryId) {
+    conditions.push(`e.category_id = $${i++}`);
+    params.push(query.categoryId);
+  }
+  if (query.dateFrom) {
+    conditions.push(`e.start_at >= $${i++}`);
+    params.push(query.dateFrom);
+  }
+  if (query.dateTo) {
+    conditions.push(`e.start_at <= $${i++}`);
+    params.push(query.dateTo);
+  }
+
+  const whereSql = conditions.join(" AND ");
+  const sortCol = organizerEventsSortColumn(query.sort);
+  const orderDir = query.order === "asc" ? "ASC" : "DESC";
+  const offset = (query.page - 1) * query.limit;
+
+  const countRes = await pool.query<{ count: string }>(
+    `SELECT COUNT(*)::text AS count FROM events e WHERE ${whereSql}`,
+    params
+  );
+  const total = Number(countRes.rows[0]?.count ?? 0);
+
+  const listParams = [...params, query.limit, offset];
+  const limitIdx = i++;
+  const offsetIdx = i;
+
+  const listRes = await pool.query<DbEventOrganizerListRow>(
+    `
+      SELECT
+        e.id, e.organizer_id, e.category_id, e.title, e.description, e.type::text, e.visibility::text,
+        e.source_type::text, e.status::text, e.start_at, e.end_at, e.address_name, e.street, e.number,
+        e.district, e.city, e.state, e.capacity, e.price_per_person::text, e.private_code, e.reservation_id,
+        e.created_at, e.updated_at
+      FROM events e
+      WHERE ${whereSql}
+      ORDER BY ${sortCol} ${orderDir}
+      LIMIT $${limitIdx} OFFSET $${offsetIdx}
+    `,
+    listParams
+  );
+
+  return {
+    data: listRes.rows.map(mapOrganizerEventListItem),
+    meta: {
+      page: query.page,
+      limit: query.limit,
+      total,
+      sort: query.sort,
+      order: query.order
+    }
+  };
+}
+
+export function mapEventDetailPublic(row: DbEvent) {
+  return {
     id: row.id,
     title: row.title,
     description: row.description,
@@ -516,30 +640,31 @@ export function mapEventDetail(row: DbEvent, includeOrganizerFields: boolean) {
     capacity: row.capacity,
     pricePerPerson: numFromDb(row.price_per_person)
   };
-  if (includeOrganizerFields && row.private_code) {
-    base.privateCode = row.private_code;
-  }
-  if (includeOrganizerFields && row.reservation_id) {
-    base.reservationId = row.reservation_id;
-  }
-  return base as {
-    id: string;
-    title: string;
-    description: string | null;
-    type: string;
-    visibility: string;
-    status: string;
-    sourceType: string;
-    startAt: string;
-    endAt: string;
-    addressName: string;
-    city: string;
-    state: string;
-    capacity: number;
-    pricePerPerson: number | null;
-    privateCode?: string;
-    reservationId?: string;
+}
+
+export function mapEventDetailForEdit(row: DbEvent) {
+  const detail: Record<string, unknown> = {
+    ...mapEventDetailPublic(row),
+    categoryId: row.category_id,
+    street: row.street,
+    number: row.number,
+    district: row.district,
+    locationReadOnly: row.source_type === "ARENA_RESERVATION"
   };
+  if (row.reservation_id) {
+    detail.reservationId = row.reservation_id;
+  }
+  if (row.private_code) {
+    detail.privateCode = row.private_code;
+  }
+  return detail;
+}
+
+export function mapEventDetail(row: DbEvent, editMode: boolean) {
+  if (editMode) {
+    return mapEventDetailForEdit(row);
+  }
+  return mapEventDetailPublic(row);
 }
 
 export async function getEventDetail(
@@ -561,8 +686,8 @@ export async function getEventDetail(
     });
   }
 
-  const includeOrganizerFields = shouldIncludePrivateCodeInDetail(row, auth);
-  return mapEventDetail(row, includeOrganizerFields);
+  const editMode = shouldIncludeOrganizerEditDetail(row, auth);
+  return mapEventDetail(row, editMode);
 }
 
 export async function updateEvent(pool: Pool, id: string, auth: AuthUser, input: PatchEventInput) {
