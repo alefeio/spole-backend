@@ -7,7 +7,7 @@ import { createRedisClient } from "../src/shared/cache/redis/redis";
 import { runMigrations } from "../src/shared/db/migrate";
 import { loadEnv, type Env } from "../src/shared/env/env";
 import { createLogger } from "../src/shared/logger/logger";
-import { resetHealth, setPostgresHealthy, setRedisHealthy } from "../src/shared/health/health";
+import { setPostgresHealthy, setRedisHealthy } from "../src/shared/health/health";
 import { createCountingRedisClient, createFailingRedisClient } from "./test-deps";
 
 function withRelaxedRateLimits(env: Env) {

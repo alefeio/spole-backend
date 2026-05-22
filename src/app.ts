@@ -26,11 +26,31 @@ export type AppDeps = {
   redis: RedisAppClient;
 };
 
+function isAllowedDevOrigin(origin: string): boolean {
+  return /^https?:\/\/(localhost|127\.0\.0\.1|172\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+)(:\d+)?$/.test(origin);
+}
+
 export function createApp(deps: AppDeps) {
   const app = express();
 
   app.disable("x-powered-by");
   app.set("trust proxy", true);
+  app.use((req, res, next) => {
+    const origin = req.headers.origin;
+
+    if (deps.env.nodeEnv !== "production" && origin && isAllowedDevOrigin(origin)) {
+      res.header("Access-Control-Allow-Origin", origin);
+      res.header("Vary", "Origin");
+      res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, Idempotency-Key");
+      res.header("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS");
+    }
+
+    if (req.method === "OPTIONS") {
+      return res.sendStatus(204);
+    }
+
+    return next();
+  });
   app.use(requestIdMiddleware());
   app.use(express.json());
 

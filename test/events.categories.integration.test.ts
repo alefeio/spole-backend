@@ -174,7 +174,9 @@ describe("sprint 03 — categorias e eventos (integração)", () => {
     expect(privateId.length).toBeGreaterThan(10);
     expect(privateCode.length).toBeGreaterThanOrEqual(8);
 
-    const listEvents = await request(app).get("/events").expect(200);
+    // Com dados de seed no mesmo banco, a primeira página global pode não incluir este evento.
+    // Filtramos pela categoria criada neste teste (UUID exclusivo).
+    const listEvents = await request(app).get("/events").query({ category: categoryId }).expect(200);
     expect(listEvents.body.success).toBe(true);
     expect(listEvents.body.meta).toMatchObject({
       page: 1,
@@ -370,7 +372,7 @@ describe("sprint 03 — categorias e eventos (integração)", () => {
     expect(freeEv.body.data).toMatchObject({ type: "FREE", visibility: "PUBLIC", status: "PUBLISHED" });
     const eventId = freeEv.body.data.id as string;
 
-    const list = await request(app).get("/events").expect(200);
+    const list = await request(app).get("/events").query({ category: categoryId }).expect(200);
     const ids = (list.body.data as { id: string }[]).map((e) => e.id);
     expect(ids).toContain(eventId);
 
