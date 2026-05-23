@@ -121,8 +121,17 @@ Se desejado futuramente, a arena pode começar com status pendente até aprovaç
 ## 12. Saídas
 - arena criada
 - arena atualizada
-- detalhes da arena
-- lista de arenas
+- detalhes da arena (`GET /arenas/:id`)
+- lista de arenas do dono autenticado (`GET /users/me/arenas`)
+
+### 12.1 `GET /users/me/arenas` (dono de arena)
+- JWT obrigatório; role: **`arena_owner`** (`user` recebe 403)
+- Retorna apenas arenas com `ownerId` igual ao usuário autenticado
+- Paginação e filtros: `page`, `limit`, `status`, `city`, `q`, `sort`, `order`
+- `q` busca em `name`, `slug` e `city`
+- Defaults: `sort=updatedAt`, `order=desc`
+- Item da listagem: `id`, `ownerId`, `name`, `slug`, `status`, `city`, `state`, `createdAt`, `updatedAt` (sem policy, document, agregados)
+- Sem cache público; admin usa `GET /admin/arenas`
 
 ## 13. Validações
 - ownerId válido
@@ -156,6 +165,7 @@ Não há disputa crítica nesta feature no nível de concorrência transacional.
 - 422 regra de domínio inválida
 
 ## 18. Critérios de aceite
+- [x] Dono de arena consegue listar suas arenas via `GET /users/me/arenas`
 - [ ] Usuário autorizado consegue criar uma arena
 - [ ] Arena fica vinculada a um owner
 - [ ] Arena possui endereço persistido corretamente

@@ -41,3 +41,20 @@ export const patchArenaSchema = z
   .refine((o) => Object.keys(o).length > 0, { message: "At least one field is required" });
 
 export type PatchArenaInput = z.infer<typeof patchArenaSchema>;
+
+const qEmpty = (v: unknown) => (v === "" || v === undefined || v === null ? undefined : v);
+
+export const listMyArenasQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(10),
+  status: z.preprocess(qEmpty, z.enum(["ACTIVE", "INACTIVE"])).optional(),
+  city: z.preprocess(qEmpty, z.string().trim().min(1).max(200)).optional(),
+  q: z.preprocess(qEmpty, z.string().trim().min(1).max(200)).optional(),
+  sort: z
+    .preprocess(qEmpty, z.enum(["name", "createdAt", "updatedAt"]))
+    .optional()
+    .default("updatedAt"),
+  order: z.preprocess(qEmpty, z.enum(["asc", "desc"])).optional().default("desc")
+});
+
+export type ListMyArenasQuery = z.infer<typeof listMyArenasQuerySchema>;

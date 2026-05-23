@@ -1,7 +1,12 @@
 import { randomBytes } from "node:crypto";
 import type { Pool } from "pg";
 import { AppError } from "../../shared/errors/app-error";
-import type { CreateArenaInput, PatchArenaInput } from "./schemas";
+import type { CreateArenaInput, ListMyArenasQuery, PatchArenaInput } from "./schemas";
+
+/** Escapa `\`, `%` e `_` para uso com ILIKE … ESCAPE '\\'. */
+function escapeIlikePattern(term: string): string {
+  return term.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
+}
 
 function slugifyArenaName(name: string): string {
   const n = name
@@ -297,4 +302,121 @@ export async function updateArena(pool: Pool, id: string, input: PatchArenaInput
   }
 
   return getArenaById(pool, id);
+}
+
+type DbArenaListRow = {
+  id: string;
+  owner_id: string;
+  name: string;
+  slug: string;
+  status: string;
+  city: string | null;
+  state: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+function mapMyArenaListItem(row: DbArenaListRow) {
+  return {
+    id: row.id,
+    ownerId: row.owner_id,
+    name: row.name,
+    slug: row.slug,
+    status: row.status,
+    city: row.city,
+    state: row.state,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
+function myArenasSortColumn(sort: ListMyArenasQuery["sort"]): string {
+  switch (sort) {
+    case "name":
+      return "a.name";
+    case "createdAt":
+      return "a.created_at";
+    case "updatedAt":
+    default:
+      return "a.updated_at";
+  }
+}
+
+export async function listMyArenas(pool: Pool, ownerId: string, query: ListMyArenasQuery) {
+  const conditions = [`a.owner_id = $1`];
+  const params: unknown[] = [ownerId];
+  let i = 2;
+
+  if (query.q) {
+    const pat = `%${escapeIlikePattern(query.q)}%`;
+    const iName = i;
+    const iSlug = i + 1;
+    const iCity = i + 2;
+    conditions.push(
+      `(a.name ILIKE $${iName} ESCAPE '\\' OR a.slug::text ILIKE $${iSlug} ESCAPE '\\' OR (addr.city IS NOT NULL AND addr.city ILIKE $${iCity} ESCAPE '\\'))`
+    );
+    params.push(pat, pat, pat);
+    i += 3;
+  }
+  if (query.status) {
+    conditions.push(`a.status = $${i++}::arena_status`);
+    params.push(query.status);
+  }
+  if (query.city) {
+    conditions.push(`addr.city ILIKE $${i++} ESCAPE '\\'`);
+    params.push(`%${escapeIlikePattern(query.city)}%`);
+  }
+
+  const whereSql = conditions.join(" AND ");
+  const joinSql = `LEFT JOIN arena_addresses addr ON addr.arena_id = a.id`;
+  const sortCol = myArenasSortColumn(query.sort);
+  const orderDir = query.order === "asc" ? "ASC" : "DESC";
+  const offset = (query.page - 1) * query.limit;
+
+  const countRes = await pool.query<{ count: string }>(
+    `
+      SELECT COUNT(DISTINCT a.id)::text AS count
+      FROM arenas a
+      ${joinSql}
+      WHERE ${whereSql}
+    `,
+    params
+  );
+  const total = Number(countRes.rows[0]?.count ?? 0);
+
+  const listParams = [...params, query.limit, offset];
+  const limitIdx = i++;
+  const offsetIdx = i;
+
+  const listRes = await pool.query<DbArenaListRow>(
+    `
+      SELECT
+        a.id,
+        a.owner_id,
+        a.name,
+        a.slug::text AS slug,
+        a.status::text AS status,
+        addr.city,
+        addr.state,
+        a.created_at,
+        a.updated_at
+      FROM arenas a
+      ${joinSql}
+      WHERE ${whereSql}
+      ORDER BY ${sortCol} ${orderDir}
+      LIMIT $${limitIdx} OFFSET $${offsetIdx}
+    `,
+    listParams
+  );
+
+  return {
+    data: listRes.rows.map(mapMyArenaListItem),
+    meta: {
+      page: query.page,
+      limit: query.limit,
+      total,
+      sort: query.sort,
+      order: query.order
+    }
+  };
 }
