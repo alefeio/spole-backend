@@ -9,6 +9,7 @@ import { bumpPublicCatalogVersion } from "../../shared/cache/public-catalog-cach
 import { listEventsQuerySchema, parseCreateEventBody, patchEventSchema } from "./schemas";
 import { buildRateLimiters } from "../../shared/security/rate-limit-profiles";
 import { cancelEvent, createEvent, getEventDetail, listPublicEvents, updateEvent } from "./service";
+import { getEventOperationsSummary } from "./operations-read-model";
 
 function formatZodError(err: ZodError) {
   return err.issues.map((i) => ({
@@ -29,6 +30,15 @@ export function eventsRoutes(deps: AppDeps) {
       }
       const { data, meta } = await listPublicEvents(deps, parsed.data);
       return sendSuccess(res, data, meta);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.get("/events/:eventId/summary", requireAuth(deps), requireRoles(["user", "arena_owner", "admin"]), async (req, res, next) => {
+    try {
+      const data = await getEventOperationsSummary(deps, req.params.eventId, req.auth!);
+      return sendSuccess(res, data);
     } catch (err) {
       next(err);
     }

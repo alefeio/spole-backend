@@ -208,6 +208,13 @@ Se o mesmo webhook chegar duas ou mais vezes, o sistema não pode duplicar efeit
 - `Payment` é polimórfico: exatamente um entre `bookingId`, `reservationId` ou `reservationOccurrenceId`.
 - `GET /users/me/payments` é paginado (Sprint 09).
 
+## Sprint 16 — read model operacional do organizador
+
+- **`GET /events/:eventId/payments`** — JWT; organizador do evento ou admin; paginação; filtro `status`; ordenação. Lista **somente** payments com `booking_id` cujo booking pertence ao evento (exclui `reservation_id` e `reservation_occurrence_id`).
+- Item: `id`, `bookingId`, `status`, `grossAmount`, `feeAmount`, `netAmount`, `method`, `provider`, `providerReference`, `paidAt`.
+- Resumo financeiro agregado: **`GET /events/:eventId/summary`** (receita só de payments `PAID` do evento).
+- O organizador **não** deve usar `/admin/payments` no painel do evento.
+
 ## 18. Critérios de aceite
 - [ ] Sistema consegue criar um pagamento `PENDING` para um booking válido
 - [ ] Sistema registra identificador da transação do gateway

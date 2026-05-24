@@ -1,19 +1,29 @@
 import { Router } from "express";
+import type { ZodError } from "zod";
 import type { AppDeps } from "../../app";
 import { sendFailure, sendSuccess } from "../../http/api-response";
 import { requireAuth } from "../../shared/middleware/require-auth";
 import { requireRoles } from "../../shared/middleware/require-roles";
 import { ROUTE_KEYS, buildRateLimiters } from "../../shared/security/rate-limit-profiles";
 import { runWithIdempotency } from "../../shared/security/idempotency";
+import { listEventPaymentsQuerySchema } from "./schemas";
 import {
   createPendingPaymentForBooking,
   createPendingPaymentForOccurrence,
   createPendingPaymentForReservation,
   getPaymentById,
+  listEventPayments,
   processPaymentWebhook,
   processReservationPaymentWebhook,
   validateWebhookSecret
 } from "./service";
+
+function formatZodError(err: ZodError) {
+  return err.issues.map((i) => ({
+    path: i.path.join("."),
+    message: i.message
+  }));
+}
 
 export const PAYMENT_WEBHOOK_SECRET_HEADER = "x-spole-payment-webhook-secret";
 export const RESERVATION_PAYMENT_WEBHOOK_SECRET_HEADER = "x-spole-reservation-payment-webhook-secret";
@@ -123,6 +133,24 @@ export function paymentsRoutes(deps: AppDeps) {
             return { status: 201, data: created };
           }
         });
+      } catch (err) {
+        next(err);
+      }
+    }
+  );
+
+  router.get(
+    "/events/:eventId/payments",
+    requireAuth(deps),
+    requireRoles(["user", "arena_owner", "admin"]),
+    async (req, res, next) => {
+      try {
+        const parsed = listEventPaymentsQuerySchema.safeParse(req.query);
+        if (!parsed.success) {
+          return sendFailure(res, 400, "VALIDATION_ERROR", "Invalid query", formatZodError(parsed.error));
+        }
+        const { data, meta } = await listEventPayments(deps, req.params.eventId, req.auth!, parsed.data);
+        return sendSuccess(res, data, meta);
       } catch (err) {
         next(err);
       }

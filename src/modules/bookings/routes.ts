@@ -1,11 +1,20 @@
 import { Router } from "express";
+import type { ZodError } from "zod";
 import type { AppDeps } from "../../app";
-import { sendSuccess } from "../../http/api-response";
+import { sendFailure, sendSuccess } from "../../http/api-response";
 import { requireAuth } from "../../shared/middleware/require-auth";
 import { requireRoles } from "../../shared/middleware/require-roles";
 import { ROUTE_KEYS, buildRateLimiters } from "../../shared/security/rate-limit-profiles";
 import { runWithIdempotency } from "../../shared/security/idempotency";
-import { cancelBooking, createPaidBooking } from "./service";
+import { listEventBookingsQuerySchema } from "./schemas";
+import { cancelBooking, createPaidBooking, listEventBookings } from "./service";
+
+function formatZodError(err: ZodError) {
+  return err.issues.map((i) => ({
+    path: i.path.join("."),
+    message: i.message
+  }));
+}
 
 export function bookingsRoutes(deps: AppDeps) {
   const router = Router();
@@ -29,6 +38,24 @@ export function bookingsRoutes(deps: AppDeps) {
             return { status: 201, data: created };
           }
         });
+      } catch (err) {
+        next(err);
+      }
+    }
+  );
+
+  router.get(
+    "/events/:eventId/bookings",
+    requireAuth(deps),
+    requireRoles(["user", "arena_owner", "admin"]),
+    async (req, res, next) => {
+      try {
+        const parsed = listEventBookingsQuerySchema.safeParse(req.query);
+        if (!parsed.success) {
+          return sendFailure(res, 400, "VALIDATION_ERROR", "Invalid query", formatZodError(parsed.error));
+        }
+        const { data, meta } = await listEventBookings(deps, req.params.eventId, req.auth!, parsed.data);
+        return sendSuccess(res, data, meta);
       } catch (err) {
         next(err);
       }

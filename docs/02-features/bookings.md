@@ -20,6 +20,11 @@
 
 - `GET /users/me/bookings` passa a exigir contrato paginado (`data` + `meta` com `page`, `limit`, `total`).
 
+## Sprint 16 — read model operacional do organizador
+
+- **`GET /events/:eventId/bookings`** — JWT; organizador do evento ou admin; paginação; filtro `status`; ordenação. Antes de listar, aplica `expireStaleBookings` no evento. Item: `id`, `userId`, `status`, `reservedAt`, `expiresAt`, `purchaseCompletedAt` (sem PII do comprador).
+- O organizador **não** deve usar `/admin/bookings?eventId=...` no painel do evento.
+
 ## 1. Resumo
 Gestão da reserva temporária de vagas ou ingressos em eventos pagos, garantindo bloqueio por tempo limitado, prevenção de dupla compra e confirmação definitiva após pagamento aprovado.
 

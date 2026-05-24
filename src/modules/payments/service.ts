@@ -6,7 +6,9 @@ import { createLogger } from "../../shared/logger/logger";
 import type { AuthUser } from "../../types/auth";
 import { bookingRedisKey } from "../bookings/booking-redis";
 import { expireStaleBookings } from "../bookings/service";
+import { assertEventOrganizerOrAdmin } from "../events/organizer-access";
 import { insertNotification } from "../notifications/service";
+import type { ListEventPaymentsQuery } from "./schemas";
 import { validatePaymentMethodProvider, type CreatePaymentBody } from "./shared";
 
 export { validateWebhookSecret, type CreatePaymentBody } from "./shared";
@@ -471,5 +473,79 @@ export async function getPaymentById(deps: AppDeps, auth: AuthUser, paymentId: s
     paidAt: row.paid_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at
+  };
+}
+
+export async function listEventPayments(
+  deps: AppDeps,
+  eventId: string,
+  auth: AuthUser,
+  query: ListEventPaymentsQuery
+) {
+  await assertEventOrganizerOrAdmin(deps.pool, eventId, auth);
+
+  const conditions = ["b.event_id = $1", "p.booking_id IS NOT NULL"];
+  const params: unknown[] = [eventId];
+  let i = 2;
+  if (query.status) {
+    conditions.push(`p.status = $${i++}::payment_status`);
+    params.push(query.status);
+  }
+  const where = `WHERE ${conditions.join(" AND ")}`;
+  const sortCol = query.sort === "paidAt" ? "p.paid_at" : "p.created_at";
+  const order = query.order === "asc" ? "ASC" : "DESC";
+  const nullsOrder = query.sort === "paidAt" ? (query.order === "asc" ? "NULLS FIRST" : "NULLS LAST") : "";
+
+  const countRes = await deps.pool.query<{ count: string }>(
+    `
+      SELECT COUNT(*)::text AS count
+      FROM payments p
+      INNER JOIN bookings b ON b.id = p.booking_id
+      ${where}
+    `,
+    params
+  );
+  const total = Number(countRes.rows[0]?.count ?? 0);
+  const offset = (query.page - 1) * query.limit;
+
+  const res = await deps.pool.query<{
+    id: string;
+    booking_id: string;
+    status: string;
+    gross_amount: string;
+    fee_amount: string;
+    net_amount: string;
+    method: string;
+    provider: string;
+    provider_reference: string;
+    paid_at: string | null;
+  }>(
+    `
+      SELECT
+        p.id, p.booking_id, p.status::text, p.gross_amount::text, p.fee_amount::text, p.net_amount::text,
+        p.method, p.provider, p.provider_reference, p.paid_at
+      FROM payments p
+      INNER JOIN bookings b ON b.id = p.booking_id
+      ${where}
+      ORDER BY ${sortCol} ${order} ${nullsOrder}
+      LIMIT $${i++} OFFSET $${i}
+    `,
+    [...params, query.limit, offset]
+  );
+
+  return {
+    data: res.rows.map((r) => ({
+      id: r.id,
+      bookingId: r.booking_id,
+      status: r.status,
+      grossAmount: Number(r.gross_amount),
+      feeAmount: Number(r.fee_amount),
+      netAmount: Number(r.net_amount),
+      method: r.method,
+      provider: r.provider,
+      providerReference: r.provider_reference,
+      paidAt: r.paid_at
+    })),
+    meta: { page: query.page, limit: query.limit, total } satisfies PaginationMeta
   };
 }

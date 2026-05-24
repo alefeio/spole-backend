@@ -6,6 +6,8 @@ import { createLogger } from "../../shared/logger/logger";
 import type { AuthUser } from "../../types/auth";
 import { insertNotification } from "../notifications/service";
 import { canAccessEventDetail, type DbEvent } from "../events/service";
+import { assertEventOrganizerOrAdmin } from "../events/organizer-access";
+import type { ListEventBookingsQuery } from "./schemas";
 import { bookingRedisKey } from "./booking-redis";
 
 const log = createLogger("bookings");
@@ -42,7 +44,7 @@ export async function expireStaleBookings(
   }
 }
 
-async function countUsedSpots(conn: PgConn, eventId: string): Promise<number> {
+export async function countEventUsedSpots(conn: PgConn, eventId: string): Promise<number> {
   const r = await conn.query<{ c: string }>(
     `
       SELECT (
@@ -54,6 +56,10 @@ async function countUsedSpots(conn: PgConn, eventId: string): Promise<number> {
     [eventId]
   );
   return Number(r.rows[0]?.c ?? 0);
+}
+
+async function countUsedSpots(conn: PgConn, eventId: string): Promise<number> {
+  return countEventUsedSpots(conn, eventId);
 }
 
 async function hasActiveReservedBooking(conn: PgConn, eventId: string, userId: string): Promise<boolean> {
@@ -343,6 +349,64 @@ export async function listMyBookings(deps: AppDeps, auth: AuthUser, query: Pagin
       status: r.status,
       reservedAt: r.reserved_at,
       expiresAt: r.expires_at
+    })),
+    meta: { page: query.page, limit: query.limit, total } satisfies PaginationMeta
+  };
+}
+
+export async function listEventBookings(
+  deps: AppDeps,
+  eventId: string,
+  auth: AuthUser,
+  query: ListEventBookingsQuery
+) {
+  await assertEventOrganizerOrAdmin(deps.pool, eventId, auth);
+  await expireStaleBookings(deps.pool, deps.redis, { eventId });
+
+  const conditions = ["event_id = $1"];
+  const params: unknown[] = [eventId];
+  let i = 2;
+  if (query.status) {
+    conditions.push(`status = $${i++}::booking_status`);
+    params.push(query.status);
+  }
+  const where = `WHERE ${conditions.join(" AND ")}`;
+  const sortCol = query.sort === "createdAt" ? "created_at" : "reserved_at";
+  const order = query.order === "asc" ? "ASC" : "DESC";
+
+  const countRes = await deps.pool.query<{ count: string }>(
+    `SELECT COUNT(*)::text AS count FROM bookings ${where}`,
+    params
+  );
+  const total = Number(countRes.rows[0]?.count ?? 0);
+  const offset = (query.page - 1) * query.limit;
+
+  const res = await deps.pool.query<{
+    id: string;
+    user_id: string;
+    status: string;
+    reserved_at: string;
+    expires_at: string;
+    purchase_completed_at: string | null;
+  }>(
+    `
+      SELECT id, user_id, status::text, reserved_at, expires_at, purchase_completed_at
+      FROM bookings
+      ${where}
+      ORDER BY ${sortCol} ${order}
+      LIMIT $${i++} OFFSET $${i}
+    `,
+    [...params, query.limit, offset]
+  );
+
+  return {
+    data: res.rows.map((r) => ({
+      id: r.id,
+      userId: r.user_id,
+      status: r.status,
+      reservedAt: r.reserved_at,
+      expiresAt: r.expires_at,
+      purchaseCompletedAt: r.purchase_completed_at
     })),
     meta: { page: query.page, limit: query.limit, total } satisfies PaginationMeta
   };

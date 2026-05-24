@@ -101,6 +101,10 @@ O frontend **não** deve usar IDs fixos como fluxo principal de descoberta: use 
 | `GET /events` | Não | Catálogo público (só publicados, não encerrados) |
 | `GET /events/:id` | Opcional | Detalhe |
 | `GET /users/me/events` | Organizador | Painel `/account/events` |
+| `GET /events/:eventId/participants` | Organizador / admin | Participantes gratuitos confirmados |
+| `GET /events/:eventId/bookings` | Organizador / admin | Reservas e compras do evento (painel operacional) |
+| `GET /events/:eventId/payments` | Organizador / admin | Pagamentos de bookings do evento |
+| `GET /events/:eventId/summary` | Organizador / admin | Ocupação e receita básica do evento |
 
 Migrações SQL ficam em `db/migrations/` e são aplicadas automaticamente no bootstrap quando a API sobe.
 

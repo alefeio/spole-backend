@@ -165,6 +165,25 @@ O evento pode ser salvo como `DRAFT` antes de ser publicado.
 - **Visitante / não-dono:** campos de leitura pública (sem `privateCode`, `categoryId`, endereço completo, `reservationId`)
 - **Organizador ou admin:** payload de edição com `categoryId`, endereço completo, `privateCode` (quando privado), `reservationId` (quando arena), `locationReadOnly` (`true` para `ARENA_RESERVATION`)
 
+### 12.3 Read model operacional do evento (Sprint 16)
+Painel do organizador por evento — **não** usar `/admin/*` para estes fluxos.
+
+| Rota | Uso no frontend |
+| --- | --- |
+| `GET /events/:eventId/bookings` | Aba/lista de reservas temporárias e compras do evento |
+| `GET /events/:eventId/payments` | Aba/lista de pagamentos ligados a bookings do evento |
+| `GET /events/:eventId/summary` | Cards de ocupação e receita básica no topo da tela operacional |
+
+**Auth:** JWT; roles `user`, `arena_owner`, `admin`. Organizador do evento ou admin. Outro autenticado → **403**; evento inexistente → **404**.
+
+**Bookings:** paginação (`page`, `limit`); filtro `status` (`RESERVED` \| `EXPIRED` \| `CANCELLED` \| `COMPLETED`); `sort` (`reservedAt` \| `createdAt`); `order`. Item: `id`, `userId`, `status`, `reservedAt`, `expiresAt`, `purchaseCompletedAt`. Sem e-mail/nome/telefone do comprador.
+
+**Payments:** paginação; filtro `status` (`PENDING` \| `PAID` \| `FAILED` \| `CANCELLED`); `sort` (`createdAt` \| `paidAt`); `order`. Apenas payments com `booking_id` do evento (exclui reservas de arena). Item: `id`, `bookingId`, `status`, `grossAmount`, `feeAmount`, `netAmount`, `method`, `provider`, `providerReference`, `paidAt`.
+
+**Summary:** `eventId`, `capacity`, `confirmedParticipants`, `activeBookings`, `completedBookings`, `cancelledBookings`, `expiredBookings`, `paidPaymentsCount`, `pendingPaymentsCount`, `grossRevenue`, `netRevenue`, `remainingSpots`. Ocupação usa participantes `CONFIRMED` + bookings `RESERVED` (mesma regra de vaga do domínio).
+
+Participantes gratuitos continuam em `GET /events/:eventId/participants`.
+
 ## 13. Validações
 - organizerId válido
 - categoryId válido
