@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import type { Pool } from "pg";
 import { AppError } from "../../shared/errors/app-error";
-import type { CreateArenaInput, ListMyArenasQuery, PatchArenaInput } from "./schemas";
+import type { CreateArenaInput, ListMyArenasQuery, ListPublicArenasQuery, PatchArenaInput } from "./schemas";
 
 /** Escapa `\`, `%` e `_` para uso com ILIKE … ESCAPE '\\'. */
 function escapeIlikePattern(term: string): string {
@@ -411,6 +411,135 @@ export async function listMyArenas(pool: Pool, ownerId: string, query: ListMyAre
 
   return {
     data: listRes.rows.map(mapMyArenaListItem),
+    meta: {
+      page: query.page,
+      limit: query.limit,
+      total,
+      sort: query.sort,
+      order: query.order
+    }
+  };
+}
+
+type DbArenaPublicListRow = {
+  id: string;
+  name: string;
+  slug: string;
+  status: string;
+  city: string | null;
+  state: string | null;
+  district: string | null;
+  street: string | null;
+  created_at: string;
+};
+
+function mapPublicArenaListItem(row: DbArenaPublicListRow) {
+  return {
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    status: row.status,
+    city: row.city,
+    state: row.state,
+    district: row.district,
+    addressName: row.name,
+    createdAt: row.created_at
+  };
+}
+
+function publicArenasSortColumn(sort: ListPublicArenasQuery["sort"]): string {
+  switch (sort) {
+    case "name":
+      return "a.name";
+    case "createdAt":
+      return "a.created_at";
+    case "updatedAt":
+    default:
+      return "a.updated_at";
+  }
+}
+
+export async function listPublicArenas(pool: Pool, query: ListPublicArenasQuery) {
+  const conditions = [`a.status = 'ACTIVE'::arena_status`];
+  const params: unknown[] = [];
+  let i = 1;
+
+  if (query.q) {
+    const pat = `%${escapeIlikePattern(query.q)}%`;
+    const iName = i;
+    const iSlug = i + 1;
+    const iCity = i + 2;
+    const iDistrict = i + 3;
+    const iStreet = i + 4;
+    conditions.push(
+      `(
+        a.name ILIKE $${iName} ESCAPE '\\'
+        OR a.slug::text ILIKE $${iSlug} ESCAPE '\\'
+        OR (addr.city IS NOT NULL AND addr.city ILIKE $${iCity} ESCAPE '\\')
+        OR (addr.district IS NOT NULL AND addr.district ILIKE $${iDistrict} ESCAPE '\\')
+        OR (addr.street IS NOT NULL AND addr.street ILIKE $${iStreet} ESCAPE '\\')
+      )`
+    );
+    params.push(pat, pat, pat, pat, pat);
+    i += 5;
+  }
+  if (query.city) {
+    conditions.push(`addr.city ILIKE $${i++} ESCAPE '\\'`);
+    params.push(`%${escapeIlikePattern(query.city)}%`);
+  }
+  if (query.state) {
+    conditions.push(`addr.state = $${i++}`);
+    params.push(query.state.toUpperCase());
+  }
+  if (query.district) {
+    conditions.push(`addr.district ILIKE $${i++} ESCAPE '\\'`);
+    params.push(`%${escapeIlikePattern(query.district)}%`);
+  }
+
+  const whereSql = conditions.join(" AND ");
+  const joinSql = `LEFT JOIN arena_addresses addr ON addr.arena_id = a.id`;
+  const sortCol = publicArenasSortColumn(query.sort);
+  const orderDir = query.order === "asc" ? "ASC" : "DESC";
+  const offset = (query.page - 1) * query.limit;
+
+  const countRes = await pool.query<{ count: string }>(
+    `
+      SELECT COUNT(DISTINCT a.id)::text AS count
+      FROM arenas a
+      ${joinSql}
+      WHERE ${whereSql}
+    `,
+    params
+  );
+  const total = Number(countRes.rows[0]?.count ?? 0);
+
+  const listParams = [...params, query.limit, offset];
+  const limitIdx = i++;
+  const offsetIdx = i;
+
+  const listRes = await pool.query<DbArenaPublicListRow>(
+    `
+      SELECT
+        a.id,
+        a.name,
+        a.slug::text AS slug,
+        a.status::text AS status,
+        addr.city,
+        addr.state,
+        addr.district,
+        addr.street,
+        a.created_at
+      FROM arenas a
+      ${joinSql}
+      WHERE ${whereSql}
+      ORDER BY ${sortCol} ${orderDir}
+      LIMIT $${limitIdx} OFFSET $${offsetIdx}
+    `,
+    listParams
+  );
+
+  return {
+    data: listRes.rows.map(mapPublicArenaListItem),
     meta: {
       page: query.page,
       limit: query.limit,

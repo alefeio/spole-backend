@@ -121,10 +121,46 @@ Se desejado futuramente, a arena pode começar com status pendente até aprovaç
 ## 12. Saídas
 - arena criada
 - arena atualizada
+- catálogo público de arenas (`GET /arenas`)
 - detalhes da arena (`GET /arenas/:id`)
 - lista de arenas do dono autenticado (`GET /users/me/arenas`)
 
-### 12.1 `GET /users/me/arenas` (dono de arena)
+### 12.1 `GET /arenas` (catálogo público — descoberta)
+- **Sem JWT** — uso principal: tela pública `/arenas` no frontend
+- Retorna **somente arenas `ACTIVE`** (filtro imposto no servidor; **não** há query param `status`)
+- Paginação e filtros: `page`, `limit`, `q`, `city`, `state`, `district`, `sort` (`name` | `createdAt` | `updatedAt`), `order` (defaults: `updatedAt`, `desc`)
+- `q` busca em `name`, `slug`, `city`, `district`, `street`
+- Item da listagem (sem dados sensíveis): `id`, `name`, `slug`, `status`, `city`, `state`, `district`, `addressName`, `createdAt`
+- `addressName` = nome comercial da arena (`name`), pois o modelo não possui campo separado de rótulo de endereço
+- **Não** retorna: `ownerId`, `document`, `phone`, `email`, `policy`, agregados
+- Sem cache Redis nesta sprint
+- Navegação: listagem → `GET /arenas/:id` para detalhe em `/arenas/[arenaId]`
+
+**Exemplo de resposta:**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "uuid",
+      "name": "Arena Norte Sports",
+      "slug": "arena-norte-sports",
+      "status": "ACTIVE",
+      "city": "Belém",
+      "state": "PA",
+      "district": "Nazaré",
+      "addressName": "Arena Norte Sports",
+      "createdAt": "2026-01-10T12:00:00.000Z"
+    }
+  ],
+  "meta": { "page": 1, "limit": 10, "total": 1, "sort": "updatedAt", "order": "desc" }
+}
+```
+
+### 12.2 `GET /arenas/:id` (detalhe)
+- Público por id; payload completo (endereço, política, contato) — **inalterado** nesta sprint
+
+### 12.3 `GET /users/me/arenas` (dono de arena)
 - JWT obrigatório; role: **`arena_owner`** (`user` recebe 403)
 - Retorna apenas arenas com `ownerId` igual ao usuário autenticado
 - Paginação e filtros: `page`, `limit`, `status`, `city`, `q`, `sort`, `order`
@@ -165,6 +201,7 @@ Não há disputa crítica nesta feature no nível de concorrência transacional.
 - 422 regra de domínio inválida
 
 ## 18. Critérios de aceite
+- [x] Catálogo público `GET /arenas` lista apenas arenas ACTIVE
 - [x] Dono de arena consegue listar suas arenas via `GET /users/me/arenas`
 - [ ] Usuário autorizado consegue criar uma arena
 - [ ] Arena fica vinculada a um owner

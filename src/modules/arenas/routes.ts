@@ -8,8 +8,8 @@ import { requireRoles } from "../../shared/middleware/require-roles";
 import { listArenaReservations } from "../reservations/service";
 import { listSlotsByArena } from "../slots/service";
 import { listSlotsQuerySchema } from "../slots/schemas";
-import { createArenaSchema, patchArenaSchema } from "./schemas";
-import { createArena, getArenaById, updateArena } from "./service";
+import { createArenaSchema, listPublicArenasQuerySchema, patchArenaSchema } from "./schemas";
+import { createArena, getArenaById, listPublicArenas, updateArena } from "./service";
 
 function formatZodError(err: ZodError) {
   return err.issues.map((i) => ({
@@ -20,6 +20,19 @@ function formatZodError(err: ZodError) {
 
 export function arenasRoutes(deps: AppDeps) {
   const router = Router();
+
+  router.get("/arenas", async (req, res, next) => {
+    try {
+      const parsed = listPublicArenasQuerySchema.safeParse(req.query);
+      if (!parsed.success) {
+        return sendFailure(res, 400, "VALIDATION_ERROR", "Invalid query", formatZodError(parsed.error));
+      }
+      const { data, meta } = await listPublicArenas(deps.pool, parsed.data);
+      return sendSuccess(res, data, meta);
+    } catch (err) {
+      next(err);
+    }
+  });
 
   router.get(
     "/arenas/:arenaId/reservations",

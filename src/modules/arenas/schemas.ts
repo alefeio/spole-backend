@@ -58,3 +58,19 @@ export const listMyArenasQuerySchema = z.object({
 });
 
 export type ListMyArenasQuery = z.infer<typeof listMyArenasQuerySchema>;
+
+export const listPublicArenasQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(10),
+  q: z.preprocess(qEmpty, z.string().trim().min(1).max(200)).optional(),
+  city: z.preprocess(qEmpty, z.string().trim().min(1).max(200)).optional(),
+  state: z.preprocess(qEmpty, z.string().trim().length(2).max(2)).optional(),
+  district: z.preprocess(qEmpty, z.string().trim().min(1).max(200)).optional(),
+  sort: z
+    .preprocess(qEmpty, z.enum(["name", "createdAt", "updatedAt"]))
+    .optional()
+    .default("updatedAt"),
+  order: z.preprocess(qEmpty, z.enum(["asc", "desc"])).optional().default("desc")
+});
+
+export type ListPublicArenasQuery = z.infer<typeof listPublicArenasQuerySchema>;

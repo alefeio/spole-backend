@@ -81,6 +81,27 @@ Variáveis JWT necessárias (veja `.env.example`):
 
 **Seed de desenvolvimento/homologação:** `npm run db:seed:dev` aplica migrações, limpa as tabelas de domínio e cria uma massa previsível com usuários, arenas, slots, reservas, eventos, bookings, payments, notificações e audit logs. Veja `docs/02-dev-seed.md`.
 
+### Arenas — mapa de endpoints
+
+| Rota | Auth | Uso |
+| --- | --- | --- |
+| `GET /arenas` | Não | Catálogo público paginado (`/arenas` no frontend); busca por `q`, `city`, `state`, `district`; só arenas `ACTIVE` |
+| `GET /arenas/:id` | Não | Detalhe completo (`/arenas/[arenaId]`) |
+| `POST /arenas` | `arena_owner` / `admin` | Criação |
+| `PATCH /arenas/:id` | Dono ou admin | Edição |
+| `GET /users/me/arenas` | `arena_owner` | Painel do dono (`/owner/arenas`) |
+| `GET /admin/arenas` | `admin` | Operação interna |
+
+O frontend **não** deve usar IDs fixos como fluxo principal de descoberta: use `GET /arenas` para listar e navegue para `GET /arenas/:id` ao selecionar uma arena.
+
+### Eventos — mapa rápido (referência)
+
+| Rota | Auth | Uso |
+| --- | --- | --- |
+| `GET /events` | Não | Catálogo público (só publicados, não encerrados) |
+| `GET /events/:id` | Opcional | Detalhe |
+| `GET /users/me/events` | Organizador | Painel `/account/events` |
+
 Migrações SQL ficam em `db/migrations/` e são aplicadas automaticamente no bootstrap quando a API sobe.
 
 ## Testes
