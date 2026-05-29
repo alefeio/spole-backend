@@ -27,6 +27,11 @@ function defaultTestEnv(overrides?: Partial<Env>): Env {
       expiresIn: "7d"
     },
     paymentsWebhookSecret: "test-webhook-secret",
+    paymentsProvider: "mock",
+    paymentsEnvironment: "sandbox",
+    asaasApiKey: undefined,
+    asaasWebhookToken: undefined,
+    asaasDefaultCustomerId: undefined,
     publicReadCacheTtlSeconds: 60,
     rateLimitAuth: { windowSeconds: 60, maxRequests: 20 },
     rateLimitPublicRead: { windowSeconds: 60, maxRequests: 120 },

@@ -25,6 +25,12 @@
 - **`GET /events/:eventId/bookings`** — JWT; organizador do evento ou admin; paginação; filtro `status`; ordenação. Antes de listar, aplica `expireStaleBookings` no evento. Item: `id`, `userId`, `status`, `reservedAt`, `expiresAt`, `purchaseCompletedAt` (sem PII do comprador).
 - O organizador **não** deve usar `/admin/bookings?eventId=...` no painel do evento.
 
+## Sprint 17 — pagamento real (checkout Pix)
+
+- `POST /bookings/:bookingId/payments` continua igual, mas a resposta passa a incluir `providerReference` (id da cobrança no gateway no modo real), `contextExpiresAt` (= `booking.expiresAt`) e o bloco `checkout` (`pixCopyPaste`, `pixQrCode`, `paymentExpiresAt`).
+- A confirmação ocorre via `POST /payments/webhook` (status `PAID` conclui o booking; `FAILED`/`CANCELLED` apenas marcam o pagamento — o booking segue o TTL existente).
+- Detalhes do contrato e do polling: ver `docs/02-features/payments.md` (seção Sprint 17).
+
 ## 1. Resumo
 Gestão da reserva temporária de vagas ou ingressos em eventos pagos, garantindo bloqueio por tempo limitado, prevenção de dupla compra e confirmação definitiva após pagamento aprovado.
 

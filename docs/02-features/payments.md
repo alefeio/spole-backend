@@ -215,6 +215,63 @@ Se o mesmo webhook chegar duas ou mais vezes, o sistema não pode duplicar efeit
 - Resumo financeiro agregado: **`GET /events/:eventId/summary`** (receita só de payments `PAID` do evento).
 - O organizador **não** deve usar `/admin/payments` no painel do evento.
 
+## Sprint 17 — Real Payments Core (provedor Pix real + checkout)
+
+### Modos de provedor
+- `PAYMENTS_PROVIDER=mock` (default em dev/testes/CI): `providerReference` é um UUID local e o `checkout` é simulado. Webhook continua aceitando o payload legado `{ providerReference, status }` com o header `X-Spole-*-Webhook-Secret`.
+- `PAYMENTS_PROVIDER=asaas`: cobrança Pix real no gateway Asaas. `providerReference` é o **id real da cobrança**. Webhook é autenticado pelo header `asaas-access-token`.
+
+Envs: `PAYMENTS_PROVIDER`, `PAYMENTS_ENV` (`sandbox|production`), `ASAAS_API_KEY`, `ASAAS_WEBHOOK_ACCESS_TOKEN`, `ASAAS_DEFAULT_CUSTOMER_ID`, `PAYMENTS_WEBHOOK_SECRET` (mock/legado).
+
+### Contrato de criação de pagamento (frontend)
+Os três POSTs continuam iguais e a resposta é **aditiva** (campos antigos preservados):
+
+```
+POST /bookings/:bookingId/payments
+POST /reservations/:reservationId/payments
+POST /reservation-occurrences/:occurrenceId/payments
+Body: { "method": "PIX", "provider": "mock-provider" | "asaas" }
+```
+
+Resposta `201`:
+```json
+{
+  "id": "uuid",
+  "bookingId": "uuid",            // ou reservationId / reservationOccurrenceId
+  "status": "PENDING",
+  "method": "PIX",
+  "provider": "mock-provider",
+  "providerReference": "id-da-cobranca-no-gateway",
+  "grossAmount": 40,
+  "feeAmount": 0,
+  "netAmount": 40,
+  "contextExpiresAt": "2026-05-29T18:30:00.000Z",
+  "checkout": {
+    "pixCopyPaste": "00020126...",
+    "pixQrCode": "data:image/png;base64,...",
+    "paymentExpiresAt": "2026-05-29T18:30:00.000Z"
+  }
+}
+```
+
+### Como o frontend deve interpretar
+- **Exibir Pix:** renderizar `checkout.pixQrCode` (imagem) e oferecer `checkout.pixCopyPaste` (copia-e-cola).
+- **Expiração:** usar `contextExpiresAt` (prazo do domínio: booking/reserva/ocorrência) para a contagem regressiva; `checkout.paymentExpiresAt` é a expiração da cobrança no gateway, quando houver.
+- **Status:** `PENDING` → aguardar; `PAID` → confirmado; `FAILED`/`CANCELLED` → cobrança não concluída (criar nova se necessário).
+- **Polling:** consultar `GET /payments/:id`. Enquanto `PENDING`, a resposta inclui o bloco `checkout` (mesmos campos da criação). Quando sai de `PENDING`, `checkout` vem `null`.
+- **Webhook:** em produção, **não** chamar o webhook manualmente — o gateway confirma de forma assíncrona. O frontend só faz polling em `GET /payments/:id` (ou recebe push do seu backend, se houver).
+
+### Webhook (servidor)
+- Rotas mantidas e separadas por domínio: `POST /payments/webhook` (booking) e `POST /reservation-payments/webhook` (reservation/occurrence).
+- Validação por provedor: mock usa o header de segredo legado; Asaas usa `asaas-access-token`.
+- Status suportados: `PAID`, `FAILED`, `CANCELLED`.
+- Validação de valor: quando o provedor informa o valor pago, ele é comparado ao valor interno; em divergência o domínio **não** é confirmado (`422 PAYMENT_AMOUNT_MISMATCH`).
+- Respostas: `403` (assinatura/token inválido), `400` (payload sem `providerReference`), `422` (status não suportado), `200 { "status": "ignored" }` (evento autenticado, porém irrelevante), `200 { "status": "processed" }` (aplicado/idempotente).
+
+### Diferença mock x real
+- **mock**: ideal para dev/testes; é necessário disparar o webhook manualmente (com o header de segredo) para simular a confirmação.
+- **real (asaas)**: a confirmação chega via webhook do gateway; o frontend só observa o status por polling.
+
 ## 18. Critérios de aceite
 - [ ] Sistema consegue criar um pagamento `PENDING` para um booking válido
 - [ ] Sistema registra identificador da transação do gateway

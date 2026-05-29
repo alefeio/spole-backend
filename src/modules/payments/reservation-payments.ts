@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import type { AppDeps } from "../../app";
 import { AppError } from "../../shared/errors/app-error";
 import { createLogger } from "../../shared/logger/logger";
@@ -6,6 +5,7 @@ import type { AuthUser } from "../../types/auth";
 import { confirmOccurrenceInTransaction, confirmReservationInTransaction } from "../reservations/confirm";
 import { expireStaleReservations } from "../reservations/expire";
 import { releaseStaleReservationOccurrences } from "../reservations/recurrence";
+import { getPaymentProvider, type WebhookEvent } from "./providers";
 import {
   ALLOWED_METHODS,
   MOCK_PROVIDER,
@@ -15,11 +15,6 @@ import {
 } from "./shared";
 
 const log = createLogger("reservation-payments");
-
-export type WebhookBody = {
-  providerReference?: string;
-  status?: string;
-};
 
 async function runReservationMaintenance(client: import("pg").PoolClient) {
   await expireStaleReservations(client);
@@ -102,7 +97,14 @@ export async function createPendingPaymentForReservation(
 
     const feeAmount = 0;
     const netAmount = gross - feeAmount;
-    const providerReference = randomUUID();
+    const contextExpiresAt = reservation.expires_at ? new Date(reservation.expires_at) : null;
+
+    const charge = await getPaymentProvider(deps.env).createPixCharge({
+      amount: gross,
+      description: "Spolê - Reserva de arena",
+      externalReference: reservationId,
+      contextExpiresAt
+    });
 
     const ins = await client.query<{
       id: string;
@@ -113,9 +115,10 @@ export async function createPendingPaymentForReservation(
       `
         INSERT INTO payments (
           user_id, reservation_id, method, provider, provider_reference,
-          gross_amount, fee_amount, net_amount, status
+          gross_amount, fee_amount, net_amount, status,
+          checkout_pix_copy_paste, checkout_pix_qr_code, checkout_expires_at, context_expires_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'PENDING')
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'PENDING', $9, $10, $11, $12)
         RETURNING id, reservation_id, status::text, provider_reference
       `,
       [
@@ -123,10 +126,14 @@ export async function createPendingPaymentForReservation(
         reservationId,
         parsed.method,
         parsed.provider,
-        providerReference,
+        charge.providerReference,
         gross,
         feeAmount,
-        netAmount
+        netAmount,
+        charge.checkout.pixCopyPaste,
+        charge.checkout.pixQrCode,
+        charge.checkout.paymentExpiresAt,
+        contextExpiresAt
       ]
     );
     const row = ins.rows[0];
@@ -145,7 +152,9 @@ export async function createPendingPaymentForReservation(
       providerReference: row.provider_reference,
       grossAmount: gross,
       feeAmount,
-      netAmount
+      netAmount,
+      contextExpiresAt: contextExpiresAt ? contextExpiresAt.toISOString() : null,
+      checkout: charge.checkout
     };
   } catch (err) {
     await client.query("ROLLBACK").catch(() => undefined);
@@ -254,7 +263,14 @@ export async function createPendingPaymentForOccurrence(
 
     const feeAmount = 0;
     const netAmount = gross - feeAmount;
-    const providerReference = randomUUID();
+    const contextExpiresAt = occ.due_at ? new Date(occ.due_at) : null;
+
+    const charge = await getPaymentProvider(deps.env).createPixCharge({
+      amount: gross,
+      description: "Spolê - Ocorrência de reserva",
+      externalReference: occurrenceId,
+      contextExpiresAt
+    });
 
     const ins = await client.query<{
       id: string;
@@ -265,9 +281,10 @@ export async function createPendingPaymentForOccurrence(
       `
         INSERT INTO payments (
           user_id, reservation_occurrence_id, method, provider, provider_reference,
-          gross_amount, fee_amount, net_amount, status
+          gross_amount, fee_amount, net_amount, status,
+          checkout_pix_copy_paste, checkout_pix_qr_code, checkout_expires_at, context_expires_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'PENDING')
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'PENDING', $9, $10, $11, $12)
         RETURNING id, reservation_occurrence_id, status::text, provider_reference
       `,
       [
@@ -275,10 +292,14 @@ export async function createPendingPaymentForOccurrence(
         occurrenceId,
         parsed.method,
         parsed.provider,
-        providerReference,
+        charge.providerReference,
         gross,
         feeAmount,
-        netAmount
+        netAmount,
+        charge.checkout.pixCopyPaste,
+        charge.checkout.pixQrCode,
+        charge.checkout.paymentExpiresAt,
+        contextExpiresAt
       ]
     );
     const row = ins.rows[0];
@@ -297,7 +318,9 @@ export async function createPendingPaymentForOccurrence(
       providerReference: row.provider_reference,
       grossAmount: gross,
       feeAmount,
-      netAmount
+      netAmount,
+      contextExpiresAt: contextExpiresAt ? contextExpiresAt.toISOString() : null,
+      checkout: charge.checkout
     };
   } catch (err) {
     await client.query("ROLLBACK").catch(() => undefined);
@@ -315,14 +338,62 @@ export async function createPendingPaymentForOccurrence(
   }
 }
 
-export async function processReservationPaymentWebhook(deps: AppDeps, body: WebhookBody) {
-  const ref = typeof body.providerReference === "string" ? body.providerReference.trim() : "";
-  const statusRaw = typeof body.status === "string" ? body.status.trim().toUpperCase() : "";
+async function markReservationPaymentNonPaid(
+  deps: AppDeps,
+  ref: string,
+  status: "FAILED" | "CANCELLED"
+): Promise<{ status: "processed" }> {
+  const client = await deps.pool.connect();
+  try {
+    await client.query("BEGIN");
+    const pRes = await client.query<{ id: string; status: string }>(
+      `
+        SELECT id, status::text
+        FROM payments
+        WHERE provider_reference = $1 AND booking_id IS NULL
+        FOR UPDATE
+      `,
+      [ref]
+    );
+    const pay = pRes.rows[0];
+    if (!pay) {
+      await client.query("ROLLBACK");
+      throw new AppError({ status: 404, code: "PAYMENT_NOT_FOUND", message: "Payment not found" });
+    }
+    if (pay.status === status || pay.status === "PAID") {
+      await client.query("COMMIT");
+      return { status: "processed" as const };
+    }
+    if (pay.status !== "PENDING") {
+      await client.query("ROLLBACK");
+      throw new AppError({
+        status: 409,
+        code: "PAYMENT_STATE_CONFLICT",
+        message: "Payment cannot transition in its current state"
+      });
+    }
+    await client.query(
+      `UPDATE payments SET status = $2::payment_status, updated_at = now() WHERE id = $1 AND status = 'PENDING'`,
+      [pay.id, status]
+    );
+    await client.query("COMMIT");
+    log.info("reservation payment marked non-paid", { providerReference: ref, status });
+    return { status: "processed" as const };
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+export async function processReservationPaymentWebhook(deps: AppDeps, event: WebhookEvent) {
+  const ref = typeof event.providerReference === "string" ? event.providerReference.trim() : "";
   if (!ref) {
     throw new AppError({ status: 400, code: "INVALID_WEBHOOK_PAYLOAD", message: "providerReference is required" });
   }
-  if (statusRaw !== "PAID") {
-    throw new AppError({ status: 422, code: "UNSUPPORTED_WEBHOOK_STATUS", message: "Unsupported webhook status" });
+  if (event.status === "FAILED" || event.status === "CANCELLED") {
+    return markReservationPaymentNonPaid(deps, ref, event.status);
   }
 
   const client = await deps.pool.connect();
@@ -363,6 +434,15 @@ export async function processReservationPaymentWebhook(deps: AppDeps, body: Webh
         status: 409,
         code: "PAYMENT_STATE_CONFLICT",
         message: "Payment cannot be confirmed in its current state"
+      });
+    }
+
+    if (event.paidAmount != null && Number(event.paidAmount) !== Number(pay.gross_amount)) {
+      await client.query("ROLLBACK");
+      throw new AppError({
+        status: 422,
+        code: "PAYMENT_AMOUNT_MISMATCH",
+        message: "Provider amount does not match expected payment amount"
       });
     }
 

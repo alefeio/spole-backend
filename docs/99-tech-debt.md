@@ -19,3 +19,9 @@ Este documento registra dívidas técnicas conhecidas, para acompanhamento sprin
 
 ### Sprint 08 — busca e cache
 - A busca textual `q` em `GET /events` usa `ILIKE` com `ESCAPE` em `title` e `description`; em catálogos muito grandes pode exigir índices ou evolução para busca dedicada (fora do escopo atual).
+
+### Sprint 17 — pagamentos reais
+- O `AsaasPaymentProvider` **não** foi validado contra o sandbox real do Asaas no CI (sem credenciais). Validação ponta a ponta em sandbox fica como passo manual antes do go-live em produção.
+- A criação da cobrança no gateway ocorre **dentro da transação** que mantém o `FOR UPDATE` do contexto (booking/reserva/ocorrência). Para o modo `mock` é instantâneo; no modo `asaas` há uma chamada de rede segurando o lock por um curto período. Em cenários de alta concorrência, considerar criar a cobrança fora da transação (com reconciliação de cobranças órfãs).
+- No modo `asaas`, o pagador é um único cliente fixo (`ASAAS_DEFAULT_CUSTOMER_ID`). A criação dinâmica de cliente por usuário (CPF/CNPJ) e o vínculo pagador↔cobrança ficam para evolução futura.
+- Estorno/refund (`REFUNDED`) e split/repasse continuam fora de escopo.

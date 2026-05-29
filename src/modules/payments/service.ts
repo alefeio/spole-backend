@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import type { AppDeps } from "../../app";
 import { AppError } from "../../shared/errors/app-error";
 import type { PaginationMeta, PaginationQuery } from "../../shared/http/pagination";
@@ -8,6 +7,7 @@ import { bookingRedisKey } from "../bookings/booking-redis";
 import { expireStaleBookings } from "../bookings/service";
 import { assertEventOrganizerOrAdmin } from "../events/organizer-access";
 import { insertNotification } from "../notifications/service";
+import { getPaymentProvider, type WebhookEvent } from "./providers";
 import type { ListEventPaymentsQuery } from "./schemas";
 import { validatePaymentMethodProvider, type CreatePaymentBody } from "./shared";
 
@@ -93,8 +93,8 @@ export async function createPendingPaymentForBooking(
       });
     }
 
-    const ev = await client.query<{ type: string; price_per_person: string }>(
-      `SELECT type::text, price_per_person::text FROM events WHERE id = $1`,
+    const ev = await client.query<{ type: string; price_per_person: string; title: string }>(
+      `SELECT type::text, price_per_person::text, title FROM events WHERE id = $1`,
       [booking.event_id]
     );
     const evRow = ev.rows[0];
@@ -118,8 +118,14 @@ export async function createPendingPaymentForBooking(
     }
     const feeAmount = 0;
     const netAmount = gross - feeAmount;
+    const contextExpiresAt = expiresAt ? new Date(expiresAt) : null;
 
-    const providerReference = randomUUID();
+    const charge = await getPaymentProvider(deps.env).createPixCharge({
+      amount: gross,
+      description: `Spolê - ${evRow.title}`,
+      externalReference: bookingId,
+      contextExpiresAt
+    });
 
     const ins = await client.query<{
       id: string;
@@ -135,13 +141,27 @@ export async function createPendingPaymentForBooking(
       `
         INSERT INTO payments (
           user_id, booking_id, method, provider, provider_reference,
-          gross_amount, fee_amount, net_amount, status
+          gross_amount, fee_amount, net_amount, status,
+          checkout_pix_copy_paste, checkout_pix_qr_code, checkout_expires_at, context_expires_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'PENDING')
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'PENDING', $9, $10, $11, $12)
         RETURNING id, booking_id, status::text, method, provider, provider_reference,
           gross_amount::text, fee_amount::text, net_amount::text
       `,
-      [booking.user_id, bookingId, parsed.method, parsed.provider, providerReference, gross, feeAmount, netAmount]
+      [
+        booking.user_id,
+        bookingId,
+        parsed.method,
+        parsed.provider,
+        charge.providerReference,
+        gross,
+        feeAmount,
+        netAmount,
+        charge.checkout.pixCopyPaste,
+        charge.checkout.pixQrCode,
+        charge.checkout.paymentExpiresAt,
+        contextExpiresAt
+      ]
     );
 
     const row = ins.rows[0];
@@ -161,7 +181,9 @@ export async function createPendingPaymentForBooking(
       providerReference: row.provider_reference,
       grossAmount: Number(row.gross_amount),
       feeAmount: Number(row.fee_amount),
-      netAmount: Number(row.net_amount)
+      netAmount: Number(row.net_amount),
+      contextExpiresAt: contextExpiresAt ? contextExpiresAt.toISOString() : null,
+      checkout: charge.checkout
     };
   } catch (err) {
     await client.query("ROLLBACK").catch(() => undefined);
@@ -179,19 +201,62 @@ export async function createPendingPaymentForBooking(
   }
 }
 
-export type WebhookBody = {
-  providerReference?: string;
-  status?: string;
-};
+async function markBookingPaymentNonPaid(
+  deps: AppDeps,
+  ref: string,
+  status: "FAILED" | "CANCELLED"
+): Promise<{ status: "processed" }> {
+  const client = await deps.pool.connect();
+  try {
+    await client.query("BEGIN");
+    const pRes = await client.query<{ id: string; status: string }>(
+      `
+        SELECT id, status::text
+        FROM payments
+        WHERE provider_reference = $1 AND booking_id IS NOT NULL
+        FOR UPDATE
+      `,
+      [ref]
+    );
+    const pay = pRes.rows[0];
+    if (!pay) {
+      await client.query("ROLLBACK");
+      throw new AppError({ status: 404, code: "PAYMENT_NOT_FOUND", message: "Payment not found" });
+    }
+    if (pay.status === status || pay.status === "PAID") {
+      await client.query("COMMIT");
+      return { status: "processed" as const };
+    }
+    if (pay.status !== "PENDING") {
+      await client.query("ROLLBACK");
+      throw new AppError({
+        status: 409,
+        code: "PAYMENT_STATE_CONFLICT",
+        message: "Payment cannot transition in its current state"
+      });
+    }
+    await client.query(
+      `UPDATE payments SET status = $2::payment_status, updated_at = now() WHERE id = $1 AND status = 'PENDING'`,
+      [pay.id, status]
+    );
+    await client.query("COMMIT");
+    log.info("payment marked non-paid", { providerReference: ref, status });
+    return { status: "processed" as const };
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
 
-export async function processPaymentWebhook(deps: AppDeps, body: WebhookBody) {
-  const ref = typeof body.providerReference === "string" ? body.providerReference.trim() : "";
-  const statusRaw = typeof body.status === "string" ? body.status.trim().toUpperCase() : "";
+export async function processPaymentWebhook(deps: AppDeps, event: WebhookEvent) {
+  const ref = typeof event.providerReference === "string" ? event.providerReference.trim() : "";
   if (!ref) {
     throw new AppError({ status: 400, code: "INVALID_WEBHOOK_PAYLOAD", message: "providerReference is required" });
   }
-  if (statusRaw !== "PAID") {
-    throw new AppError({ status: 422, code: "UNSUPPORTED_WEBHOOK_STATUS", message: "Unsupported webhook status" });
+  if (event.status === "FAILED" || event.status === "CANCELLED") {
+    return markBookingPaymentNonPaid(deps, ref, event.status);
   }
 
   const { pool, redis } = deps;
@@ -204,9 +269,10 @@ export async function processPaymentWebhook(deps: AppDeps, body: WebhookBody) {
       user_id: string;
       booking_id: string;
       status: string;
+      gross_amount: string;
     }>(
       `
-        SELECT id, user_id, booking_id, status::text
+        SELECT id, user_id, booking_id, status::text, gross_amount::text
         FROM payments
         WHERE provider_reference = $1
           AND booking_id IS NOT NULL
@@ -235,6 +301,15 @@ export async function processPaymentWebhook(deps: AppDeps, body: WebhookBody) {
         status: 409,
         code: "PAYMENT_STATE_CONFLICT",
         message: "Payment cannot be confirmed in its current state"
+      });
+    }
+
+    if (event.paidAmount != null && Number(event.paidAmount) !== Number(pay.gross_amount)) {
+      await client.query("ROLLBACK");
+      throw new AppError({
+        status: 422,
+        code: "PAYMENT_AMOUNT_MISMATCH",
+        message: "Provider amount does not match expected payment amount"
       });
     }
 
@@ -440,11 +515,16 @@ export async function getPaymentById(deps: AppDeps, auth: AuthUser, paymentId: s
     paid_at: string | null;
     created_at: string;
     updated_at: string;
+    checkout_pix_copy_paste: string | null;
+    checkout_pix_qr_code: string | null;
+    checkout_expires_at: string | null;
+    context_expires_at: string | null;
   }>(
     `
       SELECT id, user_id, booking_id, reservation_id, reservation_occurrence_id, status::text, method, provider,
         provider_reference, gross_amount::text, fee_amount::text, net_amount::text,
-        paid_at, created_at, updated_at
+        paid_at, created_at, updated_at,
+        checkout_pix_copy_paste, checkout_pix_qr_code, checkout_expires_at, context_expires_at
       FROM payments
       WHERE id = $1
     `,
@@ -457,6 +537,14 @@ export async function getPaymentById(deps: AppDeps, auth: AuthUser, paymentId: s
   if (auth.role !== "admin" && row.user_id !== auth.id) {
     throw new AppError({ status: 403, code: "FORBIDDEN", message: "Forbidden" });
   }
+  const checkout =
+    row.status === "PENDING"
+      ? {
+          pixCopyPaste: row.checkout_pix_copy_paste,
+          pixQrCode: row.checkout_pix_qr_code,
+          paymentExpiresAt: row.checkout_expires_at
+        }
+      : null;
   return {
     id: row.id,
     userId: row.user_id,
@@ -471,6 +559,8 @@ export async function getPaymentById(deps: AppDeps, auth: AuthUser, paymentId: s
     feeAmount: Number(row.fee_amount),
     netAmount: Number(row.net_amount),
     paidAt: row.paid_at,
+    contextExpiresAt: row.context_expires_at,
+    checkout,
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };

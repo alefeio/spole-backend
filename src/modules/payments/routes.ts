@@ -6,6 +6,7 @@ import { requireAuth } from "../../shared/middleware/require-auth";
 import { requireRoles } from "../../shared/middleware/require-roles";
 import { ROUTE_KEYS, buildRateLimiters } from "../../shared/security/rate-limit-profiles";
 import { runWithIdempotency } from "../../shared/security/idempotency";
+import { getPaymentProvider, type WebhookEvent } from "./providers";
 import { listEventPaymentsQuerySchema } from "./schemas";
 import {
   createPendingPaymentForBooking,
@@ -14,9 +15,9 @@ import {
   getPaymentById,
   listEventPayments,
   processPaymentWebhook,
-  processReservationPaymentWebhook,
-  validateWebhookSecret
+  processReservationPaymentWebhook
 } from "./service";
+import type { Request, Response } from "express";
 
 function formatZodError(err: ZodError) {
   return err.issues.map((i) => ({
@@ -28,18 +29,46 @@ function formatZodError(err: ZodError) {
 export const PAYMENT_WEBHOOK_SECRET_HEADER = "x-spole-payment-webhook-secret";
 export const RESERVATION_PAYMENT_WEBHOOK_SECRET_HEADER = "x-spole-reservation-payment-webhook-secret";
 
+async function handleWebhook(
+  deps: AppDeps,
+  req: Request,
+  res: Response,
+  legacySecretHeader: string,
+  apply: (deps: AppDeps, event: WebhookEvent) => Promise<{ status: string }>
+) {
+  const provider = getPaymentProvider(deps.env);
+  const parsed = provider.verifyAndParseWebhook({
+    getHeader: (name) => req.get(name) ?? undefined,
+    legacySecretValue: req.get(legacySecretHeader),
+    body: req.body ?? {}
+  });
+  switch (parsed.kind) {
+    case "forbidden":
+      return sendFailure(res, 403, "WEBHOOK_FORBIDDEN", "Invalid webhook signature");
+    case "invalid":
+      return sendFailure(res, 400, "INVALID_WEBHOOK_PAYLOAD", "providerReference is required");
+    case "unsupported_status":
+      return sendFailure(res, 422, "UNSUPPORTED_WEBHOOK_STATUS", "Unsupported webhook status");
+    case "ignore":
+      return sendSuccess(res, { status: "ignored" });
+    case "apply": {
+      const data = await apply(deps, {
+        providerReference: parsed.providerReference,
+        status: parsed.status,
+        paidAmount: parsed.paidAmount
+      });
+      return sendSuccess(res, data);
+    }
+  }
+}
+
 export function paymentsRoutes(deps: AppDeps) {
   const router = Router();
   const rateLimit = buildRateLimiters(deps);
 
   router.post("/payments/webhook", rateLimit.paymentWebhook, async (req, res, next) => {
     try {
-      const header = req.get(PAYMENT_WEBHOOK_SECRET_HEADER);
-      if (!validateWebhookSecret(header, deps.env.paymentsWebhookSecret)) {
-        return sendFailure(res, 403, "WEBHOOK_FORBIDDEN", "Invalid webhook secret");
-      }
-      const data = await processPaymentWebhook(deps, req.body ?? {});
-      return sendSuccess(res, data);
+      await handleWebhook(deps, req, res, PAYMENT_WEBHOOK_SECRET_HEADER, processPaymentWebhook);
     } catch (err) {
       next(err);
     }
@@ -47,12 +76,7 @@ export function paymentsRoutes(deps: AppDeps) {
 
   router.post("/reservation-payments/webhook", rateLimit.reservationPaymentWebhook, async (req, res, next) => {
     try {
-      const header = req.get(RESERVATION_PAYMENT_WEBHOOK_SECRET_HEADER);
-      if (!validateWebhookSecret(header, deps.env.paymentsWebhookSecret)) {
-        return sendFailure(res, 403, "WEBHOOK_FORBIDDEN", "Invalid webhook secret");
-      }
-      const data = await processReservationPaymentWebhook(deps, req.body ?? {});
-      return sendSuccess(res, data);
+      await handleWebhook(deps, req, res, RESERVATION_PAYMENT_WEBHOOK_SECRET_HEADER, processReservationPaymentWebhook);
     } catch (err) {
       next(err);
     }

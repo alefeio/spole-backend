@@ -23,8 +23,18 @@ export type Env = {
     audience: string;
     expiresIn: string;
   };
-  /** Segredo enviado no header do webhook de pagamento (sem JWT). */
+  /** Segredo enviado no header do webhook de pagamento (sem JWT). Usado no modo mock/legado. */
   paymentsWebhookSecret: string;
+  /** Provedor de pagamento ativo. `mock` (default) preserva o fluxo legado; `asaas` usa cobrança Pix real. */
+  paymentsProvider: "mock" | "asaas";
+  /** Ambiente do provedor real. */
+  paymentsEnvironment: "sandbox" | "production";
+  /** API key do Asaas (obrigatória apenas quando paymentsProvider = asaas). */
+  asaasApiKey?: string;
+  /** Token esperado no header `asaas-access-token` dos webhooks do Asaas. */
+  asaasWebhookToken?: string;
+  /** Cliente Asaas usado como pagador das cobranças (recomendado no modo real). */
+  asaasDefaultCustomerId?: string;
   /** TTL do cache de leitura pública (GET /events, GET /categories), em segundos. */
   publicReadCacheTtlSeconds: number;
   rateLimitAuth: { windowSeconds: number; maxRequests: number };
@@ -81,6 +91,11 @@ export function loadEnv(): Env {
       expiresIn: process.env.JWT_EXPIRES_IN ?? "7d"
     },
     paymentsWebhookSecret: required("PAYMENTS_WEBHOOK_SECRET"),
+    paymentsProvider: process.env.PAYMENTS_PROVIDER === "asaas" ? "asaas" : "mock",
+    paymentsEnvironment: process.env.PAYMENTS_ENV === "production" ? "production" : "sandbox",
+    asaasApiKey: process.env.ASAAS_API_KEY || undefined,
+    asaasWebhookToken: process.env.ASAAS_WEBHOOK_ACCESS_TOKEN || undefined,
+    asaasDefaultCustomerId: process.env.ASAAS_DEFAULT_CUSTOMER_ID || undefined,
     publicReadCacheTtlSeconds: numberEnv("PUBLIC_READ_CACHE_TTL_SECONDS", 60),
     rateLimitAuth: {
       windowSeconds: numberEnv("RATE_LIMIT_AUTH_WINDOW_SECONDS", 60),

@@ -8,6 +8,12 @@
 - Recorrência semanal (`RECURRING`): após confirmação, gera a próxima ocorrência; inadimplência libera slot (`RELEASED`) quando `due_at` passa (24h antes do horário).
 - Pagamento de ocorrência futura: `POST /reservation-occurrences/:occurrenceId/payments`.
 
+## Sprint 17 — pagamento real (checkout Pix)
+
+- `POST /reservations/:id/payments` e `POST /reservation-occurrences/:occurrenceId/payments` mantêm a mesma assinatura, mas a resposta passa a incluir `providerReference` (id da cobrança no gateway no modo real), `contextExpiresAt` (= `reservation.expiresAt` / `occurrence.dueAt`) e o bloco `checkout` (`pixCopyPaste`, `pixQrCode`, `paymentExpiresAt`).
+- Confirmação via `POST /reservation-payments/webhook` (rota separada do booking). Status `PAID` confirma a reserva/ocorrência; `FAILED`/`CANCELLED` apenas marcam o pagamento (a reserva segue o TTL/inadimplência já existentes).
+- Detalhes do contrato e do polling: ver `docs/02-features/payments.md` (seção Sprint 17).
+
 ## 1. Resumo
 Gestão das reservas de horários de arena feitas por organizadores, permitindo transformar slots disponíveis em reservas confirmadas que poderão originar eventos na plataforma.
 

@@ -63,7 +63,9 @@ Variáveis JWT necessárias (veja `.env.example`):
 - `JWT_AUDIENCE` (opcional)
 - `JWT_EXPIRES_IN` (opcional)
 
-**Pagamentos (Sprint 07):** `PAYMENTS_WEBHOOK_SECRET` é obrigatório. O endpoint `POST /payments/webhook` **não** usa JWT; valida o header `X-Spole-Payment-Webhook-Secret`. Nesta fase o corpo do webhook só trata confirmação com **`status: PAID`** (outros valores devolvem erro de validação sem transicionar o pagamento para `FAILED`/`CANCELLED`).
+**Pagamentos (Sprint 07):** `PAYMENTS_WEBHOOK_SECRET` é obrigatório. O endpoint `POST /payments/webhook` **não** usa JWT; valida o header `X-Spole-Payment-Webhook-Secret`.
+
+**Pagamentos reais (Sprint 17):** abstração `PaymentProvider` com modos `PAYMENTS_PROVIDER=mock` (default em dev/testes/CI) e `PAYMENTS_PROVIDER=asaas` (cobrança Pix real). Envs: `PAYMENTS_PROVIDER`, `PAYMENTS_ENV` (`sandbox|production`), `ASAAS_API_KEY`, `ASAAS_WEBHOOK_ACCESS_TOKEN`, `ASAAS_DEFAULT_CUSTOMER_ID`. Os três POSTs de criação de pagamento (`/bookings/:id/payments`, `/reservations/:id/payments`, `/reservation-occurrences/:id/payments`) retornam, de forma aditiva, `providerReference` (id da cobrança no gateway no modo real), `contextExpiresAt` e o bloco `checkout` (`pixCopyPaste`, `pixQrCode`, `paymentExpiresAt`). `GET /payments/:id` expõe o `checkout` enquanto o pagamento está `PENDING` (polling). Os webhooks (`POST /payments/webhook` e `POST /reservation-payments/webhook`) suportam `PAID`/`FAILED`/`CANCELLED`, validam assinatura/token do provedor (mock: header de segredo; Asaas: `asaas-access-token`), validam o valor confirmado e são idempotentes. Contrato detalhado para o frontend em `docs/02-features/payments.md`.
 
 **Cache público (Sprint 08):** `PUBLIC_READ_CACHE_TTL_SECONDS` (opcional, default 60) controla o TTL em Redis das respostas de `GET /events` e `GET /categories`. Se o Redis falhar, a API responde a partir do Postgres. A invalidação usa uma versão global de catálogo (`INCR` em Redis), sem `KEYS`.
 
