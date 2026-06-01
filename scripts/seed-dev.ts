@@ -72,6 +72,12 @@ function dueAt(slotStart: Date): string {
   return iso(new Date(slotStart.getTime() - 24 * 60 * 60 * 1000));
 }
 
+/** Slot com duração customizada (padrão 1h). */
+function slotWindow(days: number, hour: number, minute = 0, durationHours = 1): { start: Date; end: Date } {
+  const start = addDays(days, hour, minute);
+  return { start, end: endFrom(start, durationHours) };
+}
+
 async function insertReturningId(client: PoolClient, sql: string, params: unknown[]): Promise<string> {
   const res = await client.query<{ id: string }>(sql, params);
   const id = res.rows[0]?.id;
@@ -110,10 +116,10 @@ async function seedUsers(client: PoolClient) {
   const passwordHash = await bcrypt.hash(PASSWORD, HASH_ROUNDS);
   const users = [
     ["admin", "Admin Spolê", "admin@spole.dev", "admin", "ACTIVE", "91900000001"],
-    ["arena1", "Arena Owner Norte", "arena1@spole.dev", "arena_owner", "ACTIVE", "91900000002"],
-    ["arena2", "Arena Owner Sul", "arena2@spole.dev", "arena_owner", "ACTIVE", "91900000003"],
-    ["org1", "Organizador Corrida", "org1@spole.dev", "user", "ACTIVE", "91900000004"],
-    ["org2", "Organizadora Beach", "org2@spole.dev", "user", "ACTIVE", "91900000005"],
+    ["arena1", "Dono Arena 1", "arena1@spole.dev", "arena_owner", "ACTIVE", "91900000002"],
+    ["arena2", "Dono Arena 2", "arena2@spole.dev", "arena_owner", "ACTIVE", "91900000003"],
+    ["org1", "Organizador 1", "org1@spole.dev", "user", "ACTIVE", "91900000004"],
+    ["org2", "Organizador 2", "org2@spole.dev", "user", "ACTIVE", "91900000005"],
     ["org3", "Organizador Funcional", "org3@spole.dev", "user", "ACTIVE", "91900000006"],
     ["user1", "Usuário Ana", "user1@spole.dev", "user", "ACTIVE", "91900000011"],
     ["user2", "Usuário Bruno", "user2@spole.dev", "user", "ACTIVE", "91900000012"],
@@ -165,45 +171,85 @@ async function seedCategories(client: PoolClient) {
 }
 
 async function seedArenas(client: PoolClient) {
+  /** Catálogo público GET /arenas — 5 ACTIVE + 1 INACTIVE (não listada). */
   const arenas = [
     {
-      key: "arenaNorte",
+      key: "central",
       ownerKey: "arena1",
-      name: "Arena Norte Recorrência",
-      slug: "arena-norte-recorrencia",
-      description: "Arena ativa para testar reservas recorrentes e pagamento mínimo.",
-      phone: "9133001001",
-      email: "norte@spole.dev",
+      name: "Arena Spolê Central",
+      slug: "arena-spole-central",
+      description: "Arena principal para homologação H-19: reserva paga, slots futuros e evento em arena.",
+      phone: "9133010001",
+      email: "central@spole.dev",
       document: "11111111000191",
       status: "ACTIVE",
-      address: ["66000001", "Avenida Esporte Norte", "100", "Nazaré", "Belém", "PA", -1.455, -48.49],
-      policy: [true, 2, 30]
+      address: ["66050-000", "Travessa Doutor Moraes", "120", "Umarizal", "Belém", "PA", -1.4558, -48.4812],
+      policy: [true, 0, 100]
     },
     {
-      key: "arenaZero",
+      key: "norte",
+      ownerKey: "arena1",
+      name: "Arena Spolê Norte",
+      slug: "arena-spole-norte",
+      description: "Arena com pagamento mínimo 0% — reserva confirma sem cobrança Pix.",
+      phone: "9133010002",
+      email: "norte@spole.dev",
+      document: "11111111000192",
+      status: "ACTIVE",
+      address: ["66035-110", "Rua dos Mundurucus", "450", "Batista Campos", "Belém", "PA", -1.448, -48.478],
+      policy: [true, 0, 0]
+    },
+    {
+      key: "beach",
+      ownerKey: "arena1",
+      name: "Arena Beach Spolê",
+      slug: "arena-beach-spole",
+      description: "Beach tennis e vôlei de praia — testes de paginação e filtro por bairro.",
+      phone: "9133010003",
+      email: "beach@spole.dev",
+      document: "11111111000193",
+      status: "ACTIVE",
+      address: ["66920-000", "Avenida Beira Mar", "80", "Mosqueiro", "Belém", "PA", -1.172, -48.483],
+      policy: [true, 0, 100]
+    },
+    {
+      key: "voleiPara",
       ownerKey: "arena2",
-      name: "Arena Sul Auto Confirma",
-      slug: "arena-sul-auto-confirma",
-      description: "Arena ativa com pagamento mínimo zero para auto-confirmação.",
-      phone: "9133001002",
-      email: "sul@spole.dev",
+      name: "Arena Vôlei Pará",
+      slug: "arena-volei-para",
+      description: "Arena em Ananindeua para filtro por cidade.",
+      phone: "9133020001",
+      email: "volei@spole.dev",
+      document: "22222222000191",
+      status: "ACTIVE",
+      address: ["67030-000", "Avenida Independência", "900", "Centro", "Ananindeua", "PA", -1.3656, -48.3722],
+      policy: [false, 0, 100]
+    },
+    {
+      key: "funcionalRibeira",
+      ownerKey: "arena2",
+      name: "Arena Funcional Ribeirinha",
+      slug: "arena-funcional-ribeirinha",
+      description: "Treinos funcionais em Icoaraci — busca por nome e bairro.",
+      phone: "9133020002",
+      email: "funcional@spole.dev",
       document: "22222222000192",
       status: "ACTIVE",
-      address: ["66000002", "Travessa Auto Confirma", "200", "Marco", "Belém", "PA", -1.43, -48.46],
-      policy: [false, 1, 0]
+      address: ["66813-100", "Passagem São João", "25", "Icoaraci", "Belém", "PA", -1.298, -48.51],
+      policy: [true, 0, 50]
     },
     {
-      key: "arenaInativa",
-      ownerKey: "arena2",
-      name: "Arena Inativa Operacional",
-      slug: "arena-inativa-operacional",
-      description: "Arena inativa para testes administrativos e operacionais.",
-      phone: "9133001003",
+      key: "inativa",
+      ownerKey: "arena1",
+      name: "Arena Spolê Inativa Homologação",
+      slug: "arena-spole-inativa",
+      description: "Não aparece em GET /arenas público; visível para owner e admin.",
+      phone: "9133010099",
       email: "inativa@spole.dev",
-      document: "33333333000193",
+      document: "11111111000199",
       status: "INACTIVE",
-      address: ["66000003", "Rua Pausada", "300", "Umarizal", "Belém", "PA", -1.44, -48.48],
-      policy: [false, 4, 50]
+      address: ["66055-000", "Rua Inativa", "1", "Nazaré", "Belém", "PA", -1.46, -48.49],
+      policy: [false, 4, 100]
     }
   ] as const;
 
@@ -251,14 +297,16 @@ async function seedArenas(client: PoolClient) {
 
 async function seedSpaces(client: PoolClient) {
   const spaces = [
-    ["norteQuadra1", "arenaNorte", "Quadra 1 Recorrente", "COURT", "Quadra principal com recorrência.", 22, "ACTIVE"],
-    ["norteQuadra2", "arenaNorte", "Quadra 2", "COURT", "Quadra para eventos avulsos.", 18, "ACTIVE"],
-    ["norteFuncional", "arenaNorte", "Espaço Funcional", "FUNCTIONAL", "Área coberta para treinos.", 16, "ACTIVE"],
-    ["zeroQuadra1", "arenaZero", "Quadra Auto Confirma", "COURT", "Quadra com política de pagamento 0%.", 20, "ACTIVE"],
-    ["zeroBeach", "arenaZero", "Beach Tennis Sul", "BEACH_TENNIS", "Quadra de areia.", 8, "ACTIVE"],
-    ["zeroFuncional", "arenaZero", "Espaço Livre Sul", "FUNCTIONAL", "Área multiuso.", 15, "ACTIVE"],
-    ["inativaQuadra1", "arenaInativa", "Quadra Inativa 1", "COURT", "Espaço de arena inativa.", 18, "ACTIVE"],
-    ["inativaQuadra2", "arenaInativa", "Quadra Inativa 2", "COURT", "Espaço bloqueado para operação.", 18, "BLOCKED"]
+    ["centralSociety1", "central", "Campo Society 1", "COURT", "Society gramado — principal para H-19 reserva paga.", 22, "ACTIVE"],
+    ["centralSociety2", "central", "Campo Society 2", "COURT", "Society secundário.", 22, "ACTIVE"],
+    ["centralVolei", "central", "Quadra Vôlei", "COURT", "Quadra de vôlei coberta.", 12, "ACTIVE"],
+    ["nortePoli", "norte", "Quadra Poliesportiva", "COURT", "Poliesportiva — auto-confirma (0%).", 18, "ACTIVE"],
+    ["norteSociety", "norte", "Campo Society", "COURT", "Society na arena norte.", 20, "ACTIVE"],
+    ["voleiQ1", "voleiPara", "Quadra Vôlei 1", "COURT", "Quadra 1 Ananindeua.", 12, "ACTIVE"],
+    ["voleiQ2", "voleiPara", "Quadra Vôlei 2", "COURT", "Quadra 2 Ananindeua.", 12, "ACTIVE"],
+    ["funcionalArea", "funcionalRibeira", "Espaço Funcional", "FUNCTIONAL", "Área funcional Icoaraci.", 16, "ACTIVE"],
+    ["beachCourt", "beach", "Quadra Beach", "BEACH_TENNIS", "Beach tennis Mosqueiro.", 8, "ACTIVE"],
+    ["inativaQuadra", "inativa", "Quadra Inativa", "COURT", "Espaço em arena inativa.", 18, "ACTIVE"]
   ] as const;
 
   for (const [key, arenaKey, name, type, description, capacity, status] of spaces) {
@@ -296,19 +344,141 @@ async function createSlot(
 }
 
 async function seedSlots(client: PoolClient) {
-  await createSlot(client, "availableNorte", "norteQuadra2", addDays(3, 10), 180, "AVAILABLE", false, "Slot disponível para teste manual.");
-  await createSlot(client, "holdPending", "norteQuadra1", addDays(4, 19), 200, "HOLD", true, "Reserva pendente aguardando pagamento.");
-  await createSlot(client, "reservedRecurringParent", "norteQuadra1", addDays(6, 19), 200, "RESERVED", true, "Reserva recorrente confirmada.");
-  await createSlot(client, "cancelledSlot", "norteQuadra2", addDays(8, 16), 150, "CANCELLED", false, "Slot cancelado para operação.");
-  await createSlot(client, "autoConfirmedZero", "zeroQuadra1", addDays(5, 20), 120, "RESERVED", false, "Reserva auto-confirmada por pagamento mínimo 0%.");
-  await createSlot(client, "consumedZero", "zeroQuadra1", addDays(-2, 20), 120, "RESERVED", false, "Reserva consumida no passado.");
-  await createSlot(client, "eventArenaNorte", "norteFuncional", addDays(10, 8), 160, "RESERVED", false, "Reserva usada por evento em arena.");
-  await createSlot(client, "eventArenaZero", "zeroBeach", addDays(12, 18), 100, "RESERVED", false, "Reserva usada por evento beach.");
-  await createSlot(client, "occPending", "norteQuadra1", addDays(13, 19), 200, "HOLD", true, "Ocorrência futura pendente de pagamento.");
-  await createSlot(client, "occConfirmed", "norteQuadra1", addDays(20, 19), 200, "RESERVED", true, "Ocorrência futura confirmada.");
-  await createSlot(client, "occReleased", "norteQuadra1", addDays(-1, 19), 200, "AVAILABLE", true, "Ocorrência liberada por inadimplência.");
-  await createSlot(client, "occCancelled", "norteQuadra1", addDays(27, 19), 200, "CANCELLED", true, "Ocorrência cancelada.");
-  await createSlot(client, "inactiveAvailable", "inativaQuadra1", addDays(7, 9), 90, "AVAILABLE", false, "Slot em arena inativa.");
+  /** Grade de slots futuros (7–14 dias) para catálogo e reservas. */
+  const grid: Array<{
+    key: string;
+    spaceKey: string;
+    days: number;
+    hour: number;
+    price: number;
+    status: string;
+    recurring: boolean;
+    notes: string;
+  }> = [];
+
+  const addGrid = (
+    spaceKey: string,
+    prefix: string,
+    price: number,
+    recurring: boolean,
+    dayOffsets: number[],
+    hours: number[]
+  ) => {
+    for (const day of dayOffsets) {
+      for (const hour of hours) {
+        grid.push({
+          key: `${prefix}_d${day}h${hour}`,
+          spaceKey,
+          days: day,
+          hour,
+          price,
+          status: "AVAILABLE",
+          recurring,
+          notes: `Disponível — ${prefix} +${day}d ${hour}h`
+        });
+      }
+    }
+  };
+
+  addGrid("centralSociety1", "centralS1", 120, true, [1, 2, 5, 7, 10, 12], [8, 14, 19]);
+  addGrid("centralSociety2", "centralS2", 100, false, [2, 4, 8], [10, 18]);
+  addGrid("centralVolei", "centralV", 80, false, [3, 6], [9, 17]);
+  addGrid("nortePoli", "norteP", 90, false, [1, 3, 6, 9], [8, 15, 20]);
+  addGrid("norteSociety", "norteS", 110, false, [2, 5, 11], [19, 20]);
+  addGrid("voleiQ1", "volei1", 70, false, [1, 4, 7, 13], [8, 14, 19]);
+  addGrid("voleiQ2", "volei2", 70, false, [2, 6, 10], [10, 18]);
+  addGrid("funcionalArea", "funcR", 60, true, [1, 3, 8, 14], [7, 12, 18]);
+  addGrid("beachCourt", "beach", 95, false, [2, 5, 9, 12], [8, 17, 20]);
+
+  for (const row of grid) {
+    const { start } = slotWindow(row.days, row.hour);
+    await createSlot(client, row.key, row.spaceKey, start, row.price, row.status, row.recurring, row.notes);
+  }
+
+  /** H-19: slot livre amanhã à noite na Central (reserva + Pix real pelo frontend). */
+  const h19Start = slotWindow(1, 20).start;
+  await createSlot(
+    client,
+    "h19CentralPaid",
+    "centralSociety1",
+    h19Start,
+    120,
+    "AVAILABLE",
+    false,
+    "H-19 — criar reserva e pagamento Pix real (não pré-preencher payment)."
+  );
+
+  /** Reserva pendente (HOLD) — org1; frontend pode pagar ou criar novo fluxo em outro slot. */
+  const pendingStart = slotWindow(2, 19).start;
+  await createSlot(
+    client,
+    "holdOrg1Pending",
+    "centralSociety1",
+    pendingStart,
+    120,
+    "HOLD",
+    false,
+    "Reserva PENDING seed — aguardando pagamento (mock dev opcional)."
+  );
+
+  /** Reserva confirmada sem pagamento — org2 na Norte (0%). */
+  const norteConfirmedStart = slotWindow(3, 18).start;
+  await createSlot(
+    client,
+    "norteConfirmed",
+    "nortePoli",
+    norteConfirmedStart,
+    90,
+    "RESERVED",
+    false,
+    "Reserva CONFIRMED auto (min payment 0%)."
+  );
+
+  /** Reserva cancelada. */
+  const cancelledStart = slotWindow(4, 16).start;
+  await createSlot(
+    client,
+    "slotCancelled",
+    "norteSociety",
+    cancelledStart,
+    110,
+    "CANCELLED",
+    false,
+    "Slot cancelado — indisponível."
+  );
+
+  /** Recorrência semanal (parent + ocorrências). */
+  const recurStart = slotWindow(6, 19).start;
+  await createSlot(
+    client,
+    "recurParent",
+    "centralSociety1",
+    recurStart,
+    120,
+    "RESERVED",
+    true,
+    "Reserva recorrente confirmada — gera ocorrências."
+  );
+  await createSlot(client, "occPending", "centralSociety1", slotWindow(13, 19).start, 120, "HOLD", true, "Ocorrência PENDING_PAYMENT.");
+  await createSlot(client, "occConfirmed", "centralSociety1", slotWindow(20, 19).start, 120, "RESERVED", true, "Ocorrência CONFIRMED.");
+  await createSlot(client, "occReleased", "centralSociety1", slotWindow(-1, 19).start, 120, "AVAILABLE", true, "Ocorrência RELEASED.");
+  await createSlot(client, "occCancelled", "centralSociety1", slotWindow(27, 19).start, 120, "CANCELLED", true, "Ocorrência CANCELLED.");
+
+  /** Evento ARENA_RESERVATION — reserva confirmada na Central. */
+  const eventArenaStart = slotWindow(10, 8).start;
+  await createSlot(
+    client,
+    "eventArenaCentral",
+    "centralVolei",
+    eventArenaStart,
+    80,
+    "RESERVED",
+    false,
+    "Reserva vinculada ao evento Partida na Arena Spolê Central."
+  );
+
+  /** Slot em arena inativa (não no catálogo público). */
+  await createSlot(client, "inactiveSlot", "inativaQuadra", slotWindow(7, 9).start, 90, "AVAILABLE", false, "Slot em arena INACTIVE.");
 }
 
 async function createReservation(
@@ -349,18 +519,16 @@ async function createReservation(
 }
 
 async function seedReservations(client: PoolClient) {
-  await createReservation(client, "pending", "holdPending", "org1", "SINGLE", "PENDING", 200, 60, 0, addDays(1, 23), null);
-  await createReservation(client, "recurringConfirmed", "reservedRecurringParent", "org2", "RECURRING", "CONFIRMED", 200, 60, 60, null, addDays(-1, 10));
-  await createReservation(client, "cancelled", "cancelledSlot", "org1", "SINGLE", "CANCELLED", 150, 45, 0, null, null);
-  await createReservation(client, "consumed", "consumedZero", "org3", "SINGLE", "CONSUMED", 120, 0, 0, null, addDays(-4, 9));
-  await createReservation(client, "autoZero", "autoConfirmedZero", "org1", "SINGLE", "CONFIRMED", 120, 0, 0, null, addDays(-1, 11));
-  await createReservation(client, "eventArenaNorte", "eventArenaNorte", "org2", "SINGLE", "CONFIRMED", 160, 48, 48, null, addDays(-1, 12));
-  await createReservation(client, "eventArenaZero", "eventArenaZero", "org3", "SINGLE", "CONFIRMED", 100, 0, 0, null, addDays(-1, 13));
+  await createReservation(client, "pending", "holdOrg1Pending", "org1", "SINGLE", "PENDING", 120, 120, 0, addDays(1, 23), null);
+  await createReservation(client, "norteConfirmed", "norteConfirmed", "org2", "SINGLE", "CONFIRMED", 90, 0, 0, null, addDays(-1, 10));
+  await createReservation(client, "cancelled", "slotCancelled", "org1", "SINGLE", "CANCELLED", 110, 55, 0, null, null);
+  await createReservation(client, "recurringConfirmed", "recurParent", "org1", "RECURRING", "CONFIRMED", 120, 120, 120, null, addDays(-1, 11));
+  await createReservation(client, "eventArenaCentral", "eventArenaCentral", "org1", "SINGLE", "CONFIRMED", 80, 80, 80, null, addDays(-1, 12));
 }
 
 async function seedReservationRecurrences(client: PoolClient) {
   const parentSlotStart = addDays(6, 19);
-  ctx.recurrences.weeklyNorte = await insertReturningId(
+  ctx.recurrences.weeklyCentral = await insertReturningId(
     client,
     `
       INSERT INTO reservation_recurrences (reservation_id, frequency, day_of_week, active)
@@ -399,7 +567,7 @@ async function createOccurrence(
       RETURNING id
     `,
     [
-      ctx.recurrences.weeklyNorte,
+      ctx.recurrences.weeklyCentral,
       ctx.slots[slotKey],
       status,
       dueAt(start),
@@ -474,24 +642,126 @@ async function createEvent(
 }
 
 async function seedEvents(client: PoolClient) {
-  await createEvent(client, "freeFutebol", {
+  /** org1 — painel GET /users/me/events e homologação H-19 */
+  await createEvent(client, "futebolAberto", {
     organizerKey: "org1",
     categoryKey: "futebol",
-    title: "Futebol Amador no Umarizal",
-    description: "Pelada pública para testar busca por futebol, gramado e iniciantes.",
+    title: "Futebol Aberto Spolê",
+    description: "Evento público gratuito — busca por futebol e catálogo.",
     type: "FREE",
     visibility: "PUBLIC",
     status: "PUBLISHED",
-    start: addDays(2, 18),
-    addressName: "Praça do Umarizal",
+    start: addDays(5, 18),
+    addressName: "Campo Society Umarizal",
     city: "Belém",
     capacity: 20
   });
-  await createEvent(client, "freeCorrida", {
+  await createEvent(client, "torneioPago", {
+    organizerKey: "org1",
+    categoryKey: "futebol",
+    title: "Torneio Spolê Pago",
+    description:
+      "Principal evento H-19: criar booking + pagamento Pix real pelo frontend (sem payment pré-criado no seed).",
+    type: "PAID",
+    visibility: "PUBLIC",
+    status: "PUBLISHED",
+    start: addDays(12, 19),
+    addressName: "Arena Society Central",
+    city: "Belém",
+    capacity: 20,
+    price: 40
+  });
+  await createEvent(client, "treinoPrivado", {
     organizerKey: "org1",
     categoryKey: "corrida",
-    title: "Corrida Leve na Doca",
-    description: "Treino de corrida para filtros por q, cidade e data.",
+    title: "Treino Privado Spolê",
+    description: "Evento privado — privateCode só no GET /events/:id para dono/admin.",
+    type: "FREE",
+    visibility: "PRIVATE",
+    status: "PUBLISHED",
+    start: addDays(8, 7),
+    addressName: "Pista Privada",
+    city: "Belém",
+    capacity: 12,
+    privateCode: "TREINO-PRIV-SPOLE"
+  });
+  await createEvent(client, "rascunho", {
+    organizerKey: "org1",
+    categoryKey: "futebol",
+    title: "Evento Rascunho Spolê",
+    description: "DRAFT — visível em /users/me/events; fora do catálogo público.",
+    type: "PAID",
+    visibility: "PUBLIC",
+    status: "DRAFT",
+    start: addDays(20, 19),
+    addressName: "Campo Rascunho",
+    city: "Belém",
+    capacity: 16,
+    price: 25
+  });
+  await createEvent(client, "cancelado", {
+    organizerKey: "org1",
+    categoryKey: "volei",
+    title: "Evento Cancelado Spolê",
+    description: "CANCELLED — listagem do organizador; indisponível publicamente.",
+    type: "FREE",
+    visibility: "PUBLIC",
+    status: "CANCELLED",
+    start: addDays(15, 18),
+    addressName: "Quadra Cancelada",
+    city: "Belém",
+    capacity: 18
+  });
+  await createEvent(client, "partidaArena", {
+    organizerKey: "org1",
+    categoryKey: "futebol",
+    title: "Partida na Arena Spolê Central",
+    description: "ARENA_RESERVATION — locationReadOnly no detalhe para organizador.",
+    type: "FREE",
+    visibility: "PUBLIC",
+    status: "PUBLISHED",
+    start: addDays(10, 8),
+    addressName: "Arena Spolê Central",
+    city: "Belém",
+    capacity: 16,
+    reservationKey: "eventArenaCentral"
+  });
+
+  /** org2 — ownership e 403 */
+  await createEvent(client, "org2Pago", {
+    organizerKey: "org2",
+    categoryKey: "beachTennis",
+    title: "Torneio Beach Org2",
+    description: "Evento pago do org2 — org1 não acessa operações.",
+    type: "PAID",
+    visibility: "PUBLIC",
+    status: "PUBLISHED",
+    start: addDays(9, 18),
+    addressName: "Arena Beach",
+    city: "Belém",
+    capacity: 12,
+    price: 35
+  });
+  await createEvent(client, "org2Gratuito", {
+    organizerKey: "org2",
+    categoryKey: "funcional",
+    title: "Funcional Aberto Org2",
+    description: "Evento gratuito do org2.",
+    type: "FREE",
+    visibility: "PUBLIC",
+    status: "PUBLISHED",
+    start: addDays(6, 8),
+    addressName: "Parque Funcional",
+    city: "Ananindeua",
+    capacity: 25
+  });
+
+  /** Diversidade para busca pública e capacidade */
+  await createEvent(client, "corridaPublica", {
+    organizerKey: "org1",
+    categoryKey: "corrida",
+    title: "Corrida Leve Spolê",
+    description: "Corrida pública para filtros q/cidade.",
     type: "FREE",
     visibility: "PUBLIC",
     status: "PUBLISHED",
@@ -500,200 +770,59 @@ async function seedEvents(client: PoolClient) {
     city: "Belém",
     capacity: 30
   });
-  await createEvent(client, "freeFuncionalAlmostFull", {
-    organizerKey: "org3",
-    categoryKey: "funcional",
-    title: "Funcional Quase Lotado",
-    description: "Aula funcional com poucas vagas restantes.",
-    type: "FREE",
-    visibility: "PUBLIC",
-    status: "PUBLISHED",
-    start: addDays(5, 7),
-    addressName: "Parque Urbano",
-    city: "Ananindeua",
-    capacity: 4
-  });
-  await createEvent(client, "freeCiclismo", {
-    organizerKey: "org2",
-    categoryKey: "ciclismo",
-    title: "Pedal Iniciante Orla",
-    description: "Ciclismo urbano com rota pesquisável por pedal e orla.",
-    type: "FREE",
-    visibility: "PUBLIC",
-    status: "PUBLISHED",
-    start: addDays(9, 6),
-    addressName: "Estação das Docas",
-    city: "Belém",
-    capacity: 50
-  });
-  await createEvent(client, "freeFull", {
+  await createEvent(client, "voleiQuaseLotado", {
     organizerKey: "org3",
     categoryKey: "volei",
-    title: "Vôlei Gratuito Lotado",
-    description: "Evento gratuito lotado para validar capacidade.",
+    title: "Vôlei Quase Lotado",
+    description: "Poucas vagas — teste de capacidade.",
     type: "FREE",
     visibility: "PUBLIC",
     status: "PUBLISHED",
     start: addDays(7, 17),
-    addressName: "Praça do Vôlei",
+    addressName: "Quadra Vôlei",
     city: "Belém",
-    capacity: 2
+    capacity: 4
   });
-  await createEvent(client, "paidReserved", {
+  await createEvent(client, "pagoLotado", {
     organizerKey: "org2",
     categoryKey: "beachTennis",
-    title: "Beach Tennis com Booking Reservado",
-    description: "Evento pago com reserva ativa aguardando pagamento PIX.",
-    type: "PAID",
-    visibility: "PUBLIC",
-    status: "PUBLISHED",
-    start: addDays(6, 18),
-    addressName: "Arena Praia Livre",
-    city: "Belém",
-    capacity: 8,
-    price: 45
-  });
-  await createEvent(client, "paidCompleted", {
-    organizerKey: "org1",
-    categoryKey: "futebol",
-    title: "Futebol Pago com Payment Concluído",
-    description: "Evento pago para testar checkout e participante confirmado.",
-    type: "PAID",
-    visibility: "PUBLIC",
-    status: "PUBLISHED",
-    start: addDays(8, 20),
-    addressName: "Campo Society",
-    city: "Marituba",
-    capacity: 5,
-    price: 35
-  });
-  await createEvent(client, "paidExpired", {
-    organizerKey: "org2",
-    categoryKey: "personal",
-    title: "Personal Pago com Booking Expirado",
-    description: "Evento pago com booking expirado para regressão manual.",
-    type: "PAID",
-    visibility: "PUBLIC",
-    status: "PUBLISHED",
-    start: addDays(11, 9),
-    addressName: "Studio Personal",
-    city: "Belém",
-    capacity: 10,
-    price: 80
-  });
-  await createEvent(client, "paidFull", {
-    organizerKey: "org2",
-    categoryKey: "beachTennis",
-    title: "Beach Tennis Pago Lotado",
-    description: "Evento pago lotado por pagamentos já concluídos.",
+    title: "Beach Pago Lotado Seed",
+    description: "Pago lotado — bookings mock PAID no seed.",
     type: "PAID",
     visibility: "PUBLIC",
     status: "PUBLISHED",
     start: addDays(14, 18),
-    addressName: "Arena Praia Livre",
+    addressName: "Praia",
     city: "Belém",
     capacity: 2,
     price: 50
   });
-  await createEvent(client, "privateFree", {
-    organizerKey: "org1",
-    categoryKey: "corrida",
-    title: "Corrida Privada Empresa",
-    description: "Evento privado gratuito com código PRIVATE-RUN-12.",
-    type: "FREE",
-    visibility: "PRIVATE",
-    status: "PUBLISHED",
-    start: addDays(15, 6),
-    addressName: "Ponto Privado",
-    city: "Belém",
-    capacity: 15,
-    privateCode: "PRIVATE-RUN-12"
-  });
-  await createEvent(client, "privatePaid", {
+  await createEvent(client, "pagoExpirado", {
     organizerKey: "org2",
-    categoryKey: "funcional",
-    title: "Funcional Privado Pago",
-    description: "Evento privado pago para testar acesso por código.",
-    type: "PAID",
-    visibility: "PRIVATE",
-    status: "PUBLISHED",
-    start: addDays(16, 8),
-    addressName: "Studio Privado",
-    city: "Ananindeua",
-    capacity: 12,
-    price: 60,
-    privateCode: "PRIVATE-FIT-12"
-  });
-  await createEvent(client, "arenaFuncional", {
-    organizerKey: "org2",
-    categoryKey: "funcional",
-    title: "Funcional em Arena Reservada",
-    description: "Evento vinculado a reservation na Arena Norte.",
-    type: "FREE",
-    visibility: "PUBLIC",
-    status: "PUBLISHED",
-    start: addDays(10, 8),
-    addressName: "Arena Norte Recorrência",
-    city: "Belém",
-    capacity: 16,
-    reservationKey: "eventArenaNorte"
-  });
-  await createEvent(client, "arenaBeach", {
-    organizerKey: "org3",
-    categoryKey: "beachTennis",
-    title: "Beach Tennis em Arena Auto Confirma",
-    description: "Evento pago em reservation de arena com pagamento mínimo zero.",
+    categoryKey: "personal",
+    title: "Evento Pago Booking Expirado",
+    description: "Regressão — booking EXPIRED + payment FAILED mock.",
     type: "PAID",
     visibility: "PUBLIC",
     status: "PUBLISHED",
-    start: addDays(12, 18),
-    addressName: "Arena Sul Auto Confirma",
+    start: addDays(11, 9),
+    addressName: "Studio",
     city: "Belém",
-    capacity: 8,
-    price: 40,
-    reservationKey: "eventArenaZero"
-  });
-  await createEvent(client, "cancelled", {
-    organizerKey: "org1",
-    categoryKey: "ciclismo",
-    title: "Pedal Cancelado Administrativo",
-    description: "Evento cancelado para testar listagem e audit log.",
-    type: "FREE",
-    visibility: "PUBLIC",
-    status: "CANCELLED",
-    start: addDays(18, 6),
-    addressName: "Orla Cancelada",
-    city: "Belém",
-    capacity: 25
-  });
-  await createEvent(client, "draft", {
-    organizerKey: "org3",
-    categoryKey: "futebol",
-    title: "Rascunho de Torneio Interno",
-    description: "Evento draft visível para testes do organizador/admin.",
-    type: "PAID",
-    visibility: "PUBLIC",
-    status: "DRAFT",
-    start: addDays(21, 19),
-    addressName: "Campo Rascunho",
-    city: "Belém",
-    capacity: 12,
-    price: 25
+    capacity: 10,
+    price: 30
   });
 }
 
 async function seedEventParticipants(client: PoolClient) {
   const participants = [
-    ["freeFutebol", "user1"],
-    ["freeFuncionalAlmostFull", "user1"],
-    ["freeFuncionalAlmostFull", "user2"],
-    ["freeFuncionalAlmostFull", "user3"],
-    ["freeFull", "user1"],
-    ["freeFull", "user2"],
-    ["paidCompleted", "user4"],
-    ["paidFull", "user5"],
-    ["paidFull", "user6"],
-    ["arenaFuncional", "user2"]
+    ["futebolAberto", "user1"],
+    ["voleiQuaseLotado", "user1"],
+    ["voleiQuaseLotado", "user2"],
+    ["voleiQuaseLotado", "user3"],
+    ["torneioPago", "user2"],
+    ["pagoLotado", "user5"],
+    ["pagoLotado", "user6"],
+    ["partidaArena", "user2"]
   ] as const;
 
   for (const [eventKey, userKey] of participants) {
@@ -739,12 +868,12 @@ async function createBooking(
 }
 
 async function seedBookings(client: PoolClient) {
-  await createBooking(client, "reservedPaid", "paidReserved", "user3", "RESERVED", addDays(0, 9), addDays(1, 9), null);
-  await createBooking(client, "completedPaid", "paidCompleted", "user4", "COMPLETED", addDays(-1, 9), addDays(1, 9), addDays(-1, 10));
-  await createBooking(client, "expiredPaid", "paidExpired", "user5", "EXPIRED", addDays(-2, 9), addDays(-1, 9), null);
-  await createBooking(client, "cancelledPaid", "paidReserved", "user6", "CANCELLED", addDays(-1, 11), addDays(1, 11), null);
-  await createBooking(client, "paidFullUser5", "paidFull", "user5", "COMPLETED", addDays(-1, 12), addDays(1, 12), addDays(-1, 13));
-  await createBooking(client, "paidFullUser6", "paidFull", "user6", "COMPLETED", addDays(-1, 14), addDays(1, 14), addDays(-1, 15));
+  /** Torneio Spolê Pago: user2 já confirmado (mock) — user1 livre para H-19 criar booking novo. */
+  await createBooking(client, "torneioCompleted", "torneioPago", "user2", "COMPLETED", addDays(-1, 9), addDays(2, 9), addDays(-1, 10));
+  await createBooking(client, "torneioExpired", "torneioPago", "user5", "EXPIRED", addDays(-2, 9), addDays(-1, 9), null);
+  await createBooking(client, "pagoLotadoU5", "pagoLotado", "user5", "COMPLETED", addDays(-1, 12), addDays(1, 12), addDays(-1, 13));
+  await createBooking(client, "pagoLotadoU6", "pagoLotado", "user6", "COMPLETED", addDays(-1, 14), addDays(1, 14), addDays(-1, 15));
+  await createBooking(client, "pagoExpiradoBk", "pagoExpirado", "user4", "EXPIRED", addDays(-2, 8), addDays(-1, 8), null);
 }
 
 async function createPayment(
@@ -772,7 +901,7 @@ async function createPayment(
       context.bookingKey ? ctx.bookings[context.bookingKey] : null,
       context.reservationKey ? ctx.reservations[context.reservationKey] : null,
       context.occurrenceKey ? ctx.occurrences[context.occurrenceKey] : null,
-      `seed-${key}`,
+      `seed-dev-mock-${key}`,
       amount,
       status,
       paidAt ? iso(paidAt) : null
@@ -781,24 +910,27 @@ async function createPayment(
 }
 
 async function seedPayments(client: PoolClient) {
-  await createPayment(client, "bookingPending", "user3", { bookingKey: "reservedPaid" }, "PENDING", 45, null);
-  await createPayment(client, "bookingPaid", "user4", { bookingKey: "completedPaid" }, "PAID", 35, addDays(-1, 10));
-  await createPayment(client, "bookingFailed", "user5", { bookingKey: "expiredPaid" }, "FAILED", 80, null);
-  await createPayment(client, "bookingCancelled", "user6", { bookingKey: "cancelledPaid" }, "CANCELLED", 45, null);
-  await createPayment(client, "bookingFullUser5", "user5", { bookingKey: "paidFullUser5" }, "PAID", 50, addDays(-1, 13));
-  await createPayment(client, "bookingFullUser6", "user6", { bookingKey: "paidFullUser6" }, "PAID", 50, addDays(-1, 15));
-  await createPayment(client, "reservationPending", "org1", { reservationKey: "pending" }, "PENDING", 60, null);
-  await createPayment(client, "reservationPaid", "org2", { reservationKey: "recurringConfirmed" }, "PAID", 60, addDays(-1, 10));
-  await createPayment(client, "occurrencePaid", "org2", { occurrenceKey: "occConfirmed" }, "PAID", 200, addDays(-1, 10));
-  await createPayment(client, "occurrenceFailed", "org2", { occurrenceKey: "occReleased" }, "FAILED", 200, null);
+  /**
+   * Pagamentos **mock/dev** apenas — provider_reference prefixado `seed-dev-mock-*`.
+   * Não são cobranças Asaas. Fluxo H-19 Pix real: criar payment pelo frontend.
+   */
+  await createPayment(client, "torneioPaid", "user2", { bookingKey: "torneioCompleted" }, "PAID", 40, addDays(-1, 10));
+  await createPayment(client, "torneioFailed", "user5", { bookingKey: "torneioExpired" }, "FAILED", 40, null);
+  await createPayment(client, "lotadoU5", "user5", { bookingKey: "pagoLotadoU5" }, "PAID", 50, addDays(-1, 13));
+  await createPayment(client, "lotadoU6", "user6", { bookingKey: "pagoLotadoU6" }, "PAID", 50, addDays(-1, 15));
+  await createPayment(client, "expiradoFailed", "user4", { bookingKey: "pagoExpiradoBk" }, "FAILED", 30, null);
+  await createPayment(client, "reservationPending", "org1", { reservationKey: "pending" }, "PENDING", 120, null);
+  await createPayment(client, "reservationPaidRecur", "org1", { reservationKey: "recurringConfirmed" }, "PAID", 120, addDays(-1, 10));
+  await createPayment(client, "occurrencePaid", "org1", { occurrenceKey: "occConfirmed" }, "PAID", 120, addDays(-1, 10));
+  await createPayment(client, "occurrenceFailed", "org1", { occurrenceKey: "occReleased" }, "FAILED", 120, null);
+  await createPayment(client, "reservationCancelled", "org1", { reservationKey: "cancelled" }, "CANCELLED", 55, null);
 }
 
 async function seedNotifications(client: PoolClient) {
   const notifications = [
-    ["user4", "Pagamento confirmado", "Seu pagamento do Futebol Pago com Payment Concluído foi aprovado.", "PAYMENT_CONFIRMED", null],
-    ["user5", "Pagamento confirmado", "Seu pagamento do Beach Tennis Pago Lotado foi aprovado.", "PAYMENT_CONFIRMED", addDays(0, 8)],
-    ["user6", "Booking cancelado", "Seu booking no Beach Tennis com Booking Reservado foi cancelado.", "BOOKING_CANCELLED", null],
-    ["org2", "Pagamento da reserva confirmado", "Pagamento da reserva recorrente foi confirmado.", "PAYMENT_CONFIRMED", addDays(0, 9)]
+    ["user2", "Pagamento confirmado", "Sua vaga no Torneio Spolê Pago foi confirmada (seed mock).", "PAYMENT_CONFIRMED", null],
+    ["user5", "Pagamento confirmado", "Pagamento mock em evento lotado.", "PAYMENT_CONFIRMED", addDays(0, 8)],
+    ["org1", "Pagamento da reserva confirmado", "Reserva recorrente confirmada (seed mock).", "PAYMENT_CONFIRMED", addDays(0, 9)]
   ] as const;
 
   for (const [userKey, title, message, type, readAt] of notifications) {
@@ -824,14 +956,14 @@ async function seedAuditLogs(client: PoolClient) {
     [
       "ARENA_STATUS_CHANGED",
       "ARENA",
-      ctx.arenas.arenaInativa,
+      ctx.arenas.inativa,
       "Arena marcada como inativa para homologação.",
       { previousStatus: "ACTIVE", nextStatus: "INACTIVE", seed: true }
     ],
     [
       "EVENT_CANCELLED",
       "EVENT",
-      ctx.events.cancelled,
+      ctx.events.cancelado,
       "Cancelamento administrativo de evento seed.",
       { status: "CANCELLED", seed: true }
     ]
@@ -905,6 +1037,11 @@ async function runSeed() {
 
       console.log("[seed-dev] Massa de desenvolvimento criada com sucesso.");
       console.log(`[seed-dev] Senha padrão: ${PASSWORD}`);
+      console.log("[seed-dev] H-19 — evento pago Pix real: Torneio Spolê Pago (org1) + login user1@spole.dev");
+      console.log("[seed-dev] H-19 — reserva arena paga: Arena Spolê Central, slot h19CentralPaid (+1d 20h), org1@spole.dev");
+      console.log("[seed-dev] GET /arenas: 5 arenas ACTIVE (Belém/Ananindeua); filtro city=Ananindeua → Arena Vôlei Pará");
+      console.log("[seed-dev] Pagamentos no seed são mock (seed-dev-mock-*). Pix real só via fluxo do frontend.");
+      console.log("[seed-dev] Documentação: docs/02-dev-seed.md e docs/homologation-h19-api.md");
     } catch (err) {
       await client.query("ROLLBACK").catch(() => undefined);
       throw err;

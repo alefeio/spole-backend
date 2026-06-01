@@ -81,7 +81,7 @@ Variáveis JWT necessárias (veja `.env.example`):
 
 **Segurança operacional (Sprint 12):** toda resposta inclui `X-Request-Id` (reutiliza o header do cliente se válido; senão gera UUID). Logs incluem o mesmo identificador. Rate limiting com Redis nos endpoints prioritários (auth, `GET /events`, criação de booking/payments e webhooks com limite permissivo). Se o Redis falhar no rate limit, a API segue (**fail-open** com log). Endpoints críticos de criação aceitam `Idempotency-Key` **opcional**; replay devolve a mesma resposta persistida; chave reutilizada com payload diferente → `409 IDEMPOTENCY_KEY_REUSED`. Variáveis: `RATE_LIMIT_*`, `IDEMPOTENCY_TTL_SECONDS` (veja `.env.example`).
 
-**Seed de desenvolvimento/homologação:** `npm run db:seed:dev` aplica migrações, limpa as tabelas de domínio e cria uma massa previsível com usuários, arenas, slots, reservas, eventos, bookings, payments, notificações e audit logs. Veja `docs/02-dev-seed.md`.
+**Seed de desenvolvimento/homologação:** `npm run db:seed:dev` aplica migrações, limpa as tabelas de domínio e cria massa para catálogo de arenas, painéis owner/organizador, operação de evento e homologação **H-19** (Pix real via frontend — sem cobrança Asaas no seed). Contas: senha `SpoleDev123!`. Veja `docs/02-dev-seed.md` e `docs/homologation-h19-api.md`.
 
 ### Arenas — mapa de endpoints
 

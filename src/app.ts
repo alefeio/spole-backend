@@ -27,7 +27,13 @@ export type AppDeps = {
 };
 
 function isAllowedDevOrigin(origin: string): boolean {
-  return /^https?:\/\/(localhost|127\.0\.0\.1|172\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+)(:\d+)?$/.test(origin);
+  if (/^https?:\/\/(localhost|127\.0\.0\.1|172\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+)(:\d+)?$/.test(origin)) {
+    return true;
+  }
+  // Homologação H-19: frontend em túnel (ngrok / Cloudflare) apontando para API local.
+  if (/^https:\/\/[a-z0-9-]+\.ngrok-free\.app$/i.test(origin)) return true;
+  if (/^https:\/\/[a-z0-9-]+\.trycloudflare\.com$/i.test(origin)) return true;
+  return false;
 }
 
 export function createApp(deps: AppDeps) {

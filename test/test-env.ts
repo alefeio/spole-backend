@@ -6,6 +6,12 @@ process.env.JWT_ISSUER ??= "spole-api";
 process.env.JWT_AUDIENCE ??= "spole-clients";
 process.env.JWT_EXPIRES_IN ??= "7d";
 process.env.PAYMENTS_WEBHOOK_SECRET ??= "test-webhook-secret";
+/** Testes de integração sempre usam mock — não herdam PAYMENTS_PROVIDER=asaas do .env local. */
+process.env.PAYMENTS_PROVIDER = "mock";
+process.env.PAYMENTS_ENV = "sandbox";
+delete process.env.ASAAS_API_KEY;
+delete process.env.ASAAS_DEFAULT_CUSTOMER_ID;
+delete process.env.ASAAS_WEBHOOK_ACCESS_TOKEN;
 process.env.RATE_LIMIT_AUTH_MAX_REQUESTS ??= "10000";
 process.env.RATE_LIMIT_PUBLIC_READ_MAX_REQUESTS ??= "10000";
 process.env.RATE_LIMIT_AUTHENTICATED_MAX_REQUESTS ??= "10000";
